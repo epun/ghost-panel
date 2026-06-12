@@ -80,6 +80,10 @@ export class SceneObjectManager {
 
     this.gizmo.addEventListener('dragging-changed', (e) => {
       if (this.orbitControls) this.orbitControls.enabled = !e.value;
+      // Let hosts that withhold `controls` (so Ghost Panel doesn't seize the
+      // camera) still pause their own camera controls while the built-in gizmo
+      // drags — otherwise the gizmo and the host's OrbitControls fight.
+      try { this._onDraggingChanged?.(e.value); } catch {}
       // Pause/resume the AnimationMixer for the active object while dragging,
       // otherwise the mixer keeps overwriting position/rotation from its track
       // and the gizmo "snaps back". When drag ends, resume playback.
@@ -268,9 +272,13 @@ export class SceneObjectManager {
    * "PerspectiveCamera" containing the actual camera would see a
    * generic cube row instead of a proper camera row + focus button.
    */
-  register(name, object) {
+  register(name, object, opts = {}) {
     if (this.objects[name]) return;
     const entry = { object };
+    // Optional explicit parent for outliner nesting — so hosts don't have to
+    // reach into `objects[name].parentObj`. The parent should also be registered
+    // (and expandable) for the child row to nest beneath it.
+    if (opts.parent) entry.parentObj = opts.parent;
     const camRef = findNestedCamera(object);
     if (camRef) {
       entry.kind = 'camera';
@@ -473,6 +481,9 @@ export class SceneObjectManager {
     const entry = this.objects[name];
     const obj = entry.object;
     const skipGizmo =
+      // Whole built-in gizmo turned off via `createGhostPanel({ gizmo: false })`
+      // — for hosts that run their own transform rig.
+      this._gizmoDisabled ||
       entry.kind === 'camera' ||
       obj?.isAmbientLight ||
       obj?.type === 'AmbientLight' ||
@@ -480,6 +491,9 @@ export class SceneObjectManager {
       // pivot the host drives with its own TransformControls). The contextual
       // mini toolbar still binds to them so their transform stays editable.
       obj?.userData?.__duiIgnore ||
+      // Per-object routing hook: return false to let the host's rig own this
+      // object's transform instead of the built-in gizmo.
+      (typeof this._beforeGizmoAttach === 'function' && this._beforeGizmoAttach(obj) === false) ||
       // Generic safety net: anything not currently in our scene graph.
       !this._isInScene(obj) ||
       // Multi-select: the gizmo always tracks the PRIMARY (most-recent)
@@ -1092,6 +1106,11 @@ export function autoRegisterScene(objectManager, scene) {
     else if (isExpandable(node) && node.name?.trim() && (node.parent === scene || parentNode)) kind = 'group';
     if (!kind) return;
     let name = node.name?.trim();
+    // Skip auto-registering UNNAMED meshes: they'd get junk names (Object,
+    // Object3D.02 …) that flood the outliner and pollute exports. Named meshes
+    // (and lights/cameras, which are few and always useful) still register. A
+    // host that wants an unnamed mesh in the outliner can give it a `.name`.
+    if (!name && kind === 'mesh') return;
     if (!name || seen.has(name)) {
       const base = (node.type || node.constructor?.name || 'Object').replace(/Light$|Mesh$|Camera$/, '') || 'Object';
       counts[base] = (counts[base] || 0) + 1;

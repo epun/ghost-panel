@@ -207,6 +207,14 @@ export function createGhostPanel(opts = {}) {
     workflowPicker = true,         // show a workflow dropdown at the top of the main panel
     // Three.js mode (optional)
     scene, camera, renderer, controls,
+    // Built-in TransformControls gizmo controls (Three.js mode):
+    //   gizmo: false              → never attach the built-in gizmo (host runs its own rig)
+    //   onDraggingChanged(active) → fired on gizmo drag start/stop, so hosts that
+    //                               withhold `controls` can still pause their camera
+    //   beforeGizmoAttach(obj)    → return false to skip the gizmo for that object
+    gizmo = true,
+    onDraggingChanged,
+    beforeGizmoAttach,
     // Scene panel — defaults to true so every host gets the canonical
     // "Outliner on the left, Inspector on the right" layout out of the
     // box. Hosts can pass `scenePanel: false` to opt out (e.g. tiny
@@ -261,6 +269,10 @@ export function createGhostPanel(opts = {}) {
   let gizmos = null;
   if (scene && camera && renderer) {
     objectManager = new SceneObjectManager({ scene, camera, renderer, controls });
+    // Host-configurable gizmo behavior (see opts above).
+    objectManager._gizmoDisabled = gizmo === false;
+    if (typeof onDraggingChanged === 'function') objectManager._onDraggingChanged = onDraggingChanged;
+    if (typeof beforeGizmoAttach === 'function') objectManager._beforeGizmoAttach = beforeGizmoAttach;
     gizmos = createGizmoSystem(scene, camera, renderer, controls);
   } else {
     objectManager = new ObjectManager();
@@ -379,21 +391,46 @@ export function createGhostPanel(opts = {}) {
 
   /** Snapshot all control values + registered objects to a plain object. */
   function toJSON() {
+    // Float hygiene: snap denormals / near-zero to 0 and trim float noise so
+    // exports diff cleanly and stay hand-editable (§4.4).
+    const clean = (v) => {
+      if (typeof v === 'number') {
+        if (!Number.isFinite(v)) return v;
+        if (Math.abs(v) < 1e-9) return 0;
+        return Number(v.toPrecision(7));
+      }
+      if (Array.isArray(v)) return v.map(clean);
+      if (v && typeof v === 'object') {
+        const o = {};
+        for (const k in v) o[k] = clean(v[k]);
+        return o;
+      }
+      return v;
+    };
     const data = { panels: {}, objects: {} };
     [panel, leftPanel].filter(Boolean).forEach(p => {
       const panelData = {};
       Object.entries(p.folders).forEach(([fname, folder]) => {
+        // Skip selection-contextual / transient folders (Material, Camera
+        // Settings, light folders, …) so exports are stable across sessions
+        // regardless of what happened to be selected at export time (§4.2).
+        if (folder._transient) return;
         const folderData = {};
         Object.entries(folder.controls).forEach(([cname, ctrl]) => {
-          if (ctrl.getValue) folderData[cname] = ctrl.getValue();
+          if (ctrl.getValue) folderData[cname] = clean(ctrl.getValue());
         });
-        panelData[fname] = folderData;
+        // Skip empty (action-only) folders — "Move selection": {} etc. (§4.3).
+        if (Object.keys(folderData).length) panelData[fname] = folderData;
       });
       data.panels[p.title] = panelData;
     });
     if (objectManager) {
       objectManager.getNames().forEach(n => {
-        data.objects[n] = objectManager.getState(n);
+        // Skip host-internal pseudo-objects (e.g. a gizmo-pivot 'Selection')
+        // tagged __duiIgnore — they aren't part of the authored scene (§4.3).
+        const obj = objectManager.getObject?.(n);
+        if (obj?.userData?.__duiIgnore) return;
+        data.objects[n] = clean(objectManager.getState(n));
       });
     }
     return data;

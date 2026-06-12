@@ -926,7 +926,7 @@ export function attachContextualInspector(ui, opts = {}) {
   function showMaterialFor(object) {
     removeMaterial();
     if (!object || !object.isMesh) return;
-    const mat = object.material;
+    let mat = object.material;
     if (!mat) return;
 
     // NB: Material's onChange handlers write directly to mat.<prop>; they
@@ -939,6 +939,58 @@ export function attachContextualInspector(ui, opts = {}) {
     if (toolFolder && materialFolder.element) {
       const after = toolFolder.element.nextSibling;
       ui.panel.body.insertBefore(materialFolder.element, after);
+    }
+
+    // ── Copy-on-write for shared materials ──
+    // Imported GLB / three.js scenes commonly share ONE material instance across
+    // many meshes (consolidated for performance). Editing it here would bleed to
+    // every mesh that uses it. So the first time the user changes anything, give
+    // THIS mesh its own copy (if the instance is actually shared), isolating the
+    // edit. Idempotent per mesh via userData.__matUnique.
+    const TEX_KEYS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap',
+                      'aoMap', 'alphaMap', 'bumpMap', 'displacementMap', 'specularMap'];
+    const isShared = (m) => {
+      const sc = ui.objectManager?.scene;
+      if (!sc?.traverse || !m) return false;
+      let count = 0;
+      sc.traverse((n) => {
+        if (!n.isMesh || !n.material) return;
+        const mm = n.material;
+        if (Array.isArray(mm) ? mm.includes(m) : mm === m) count++;
+      });
+      return count > 1;
+    };
+    const cloneOwn = (m) => {
+      const c = m.clone();
+      // material.clone() shares texture refs — clone the maps too so texture /
+      // UV edits isolate as well, not just numeric/color props.
+      for (const k of TEX_KEYS) if (c[k]?.clone) c[k] = c[k].clone();
+      return c;
+    };
+    const ensureUnique = () => {
+      if (object.userData.__matUnique) { mat = object.material; return; }
+      object.userData.__matUnique = true;
+      const cur = object.material;
+      if (Array.isArray(cur)) {
+        object.material = cur.map((m) => (isShared(m) ? cloneOwn(m) : m));
+      } else if (isShared(cur)) {
+        object.material = cloneOwn(cur);
+      }
+      mat = object.material;
+    };
+    // Route every control's onChange through ensureUnique so any edit triggers
+    // copy-on-write before it mutates the material. (Texture upload / clear use
+    // raw DOM listeners — those call ensureUnique() directly below.)
+    for (const m of ['addColor', 'addSlider', 'addCheckbox', 'addSelect', 'addNumber']) {
+      const orig = materialFolder[m]?.bind(materialFolder);
+      if (!orig) continue;
+      materialFolder[m] = (label, o = {}) => {
+        if (o && typeof o.onChange === 'function') {
+          const oc = o.onChange;
+          o = { ...o, onChange: (...a) => { ensureUnique(); return oc(...a); } };
+        }
+        return orig(label, o);
+      };
     }
 
     // Color (works for most materials)
@@ -1045,6 +1097,7 @@ export function attachContextualInspector(ui, opts = {}) {
     // section in the panel. No custom CSS classes here.
     async function uploadTexture(file) {
       if (!file) return;
+      ensureUnique(); // copy-on-write before mutating a possibly-shared material
       let target = object.material;
       if (!TEXTURE_CAPABLE_MATERIALS.has(target.type)) {
         const prevColor = target.color?.clone?.() || new THREE.Color(0xffffff);
@@ -1108,7 +1161,8 @@ export function attachContextualInspector(ui, opts = {}) {
       clear.dataset.tooltip = 'Clear texture';
       clear.innerHTML = '×';
       clear.addEventListener('click', () => {
-        mat.map.dispose?.();
+        ensureUnique(); // copy-on-write before clearing a possibly-shared map
+        mat.map?.dispose?.();
         mat.map = null;
         mat.needsUpdate = true;
         showMaterialFor(object);
