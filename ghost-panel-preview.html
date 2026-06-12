@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./assets/branding/logo-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./assets/branding/logo-192.png">
+  <link rel="apple-touch-icon" href="./assets/branding/logo-192.png">
+  <title>Ghost Panel preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body {
+      background:
+        radial-gradient(circle at 20% 30%, hsl(280 80% 50% / 0.5) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, hsl(200 90% 55% / 0.5) 0%, transparent 50%),
+        radial-gradient(circle at 50% 90%, hsl(340 80% 60% / 0.45) 0%, transparent 50%),
+        #0a0820;
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #info {
+      max-width: 480px;
+      text-align: center;
+      color: rgba(255,255,255,0.7);
+      line-height: 1.6;
+      padding: 24px;
+    }
+    #info h1 { color: #fff; margin-bottom: 12px; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+    #info p { font-size: 14px; }
+    #info code {
+      background: rgba(255,255,255,0.08);
+      padding: 1px 5px; border-radius: 3px;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+    }
+    .theme-switcher {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 8px; z-index: 1;
+    }
+    .theme-switcher button {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      padding: 8px 16px; border-radius: 6px;
+      font-family: inherit; font-size: 13px; cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .theme-switcher button:hover { background: rgba(255,255,255,0.12); }
+    .theme-switcher button.active { background: rgba(255,255,255,0.2); }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <h1>Ghost Panel preview</h1>
+    <p>
+      <strong>Left:</strong> Blender-style 3D scene panel (transform gizmo modes, scene tree)<br>
+      <strong>Right:</strong> shadcn-styled debug panel (your custom controls)<br>
+      Toggle dark/light below.
+    </p>
+  </div>
+
+  <div class="theme-switcher">
+    <button data-theme="zinc"  class="active">Dark</button>
+    <button data-theme="light">Light</button>
+  </div>
+
+  <script type="module">
+    import { createGhostPanel } from './index.js';
+
+    // ── Build a panel with every kind of control ──
+    // The main "Inspector" panel uses Apple Liquid Glass styling.
+    const ui = createGhostPanel({
+      title: 'Inspector',
+      width: 340,
+      visible: true,
+      liquidGlass: true,
+    });
+
+    // Scene panel — also uses Liquid Glass styling. Save/load is owned by the
+    // main Inspector panel, so we hide it here to avoid duplication.
+    const ui2 = createGhostPanel({
+      title: 'Scene',
+      side: 'left',
+      width: 280,
+      visible: true,
+      liquidGlass: true,
+      saveLoad: false,
+    });
+
+    // Camera folder
+    ui.addFolder('Camera')
+      .addVec3('Position', { min: -10, max: 10, value: { x: 0, y: 1.5, z: 5 }, onChange: () => {}, tooltip: 'World-space position of the camera' })
+      .addSlider('FOV',    { min: 10, max: 120, value: 50, onChange: () => {}, tooltip: 'Field of view in degrees. Lower = telephoto, higher = wide-angle.' });
+
+    // Material folder
+    ui.addFolder('Material')
+      .addColor('Albedo',     { value: '#88ccff', onChange: () => {}, tooltip: 'Base color of the material' })
+      .addSlider('Metalness', { min: 0, max: 1, value: 0.3, onChange: () => {}, tooltip: 'How metallic the surface is. 0 = dielectric, 1 = full metal.' })
+      .addSlider('Roughness', { min: 0, max: 1, value: 0.5, onChange: () => {}, tooltip: 'Surface micro-roughness. 0 = mirror, 1 = chalk.' })
+      .addCheckbox('Wireframe', { value: false, onChange: () => {}, tooltip: 'Render the mesh as wireframe instead of filled' })
+      .addSelect('Blend Mode', {
+        options: ['Normal', 'Add', 'Multiply', 'Screen'],
+        value: 'Normal',
+        onChange: () => {},
+        tooltip: 'How this material composites with whatever is behind it',
+      });
+
+    // Post FX folder
+    ui.addFolder('Post FX')
+      .addCheckbox('Bloom',  { value: true,  onChange: () => {} })
+      .addSlider('Strength', { min: 0, max: 3, value: 0.8, onChange: () => {} })
+      .addSlider('Threshold',{ min: 0, max: 2, value: 0.85, onChange: () => {} })
+      .addFile('Upload LUT', { accept: '.cube,.3dl', onChange: () => {}, tooltip: 'Upload a 3D LUT (.cube or .3dl) to color-grade the entire viewport' })
+      .addButtonRow([
+        { label: 'Reset',  onClick: () => {}, tooltip: 'Reset all post FX values to defaults' },
+        { label: 'Random', onClick: () => {}, tooltip: 'Randomize post FX values' },
+      ]);
+
+    // Animation folder
+    ui.addFolder('Animation', { collapsed: true })
+      .addText('Name',  { value: 'idle', onChange: () => {} })
+      .addSlider('Speed', { min: 0, max: 4, value: 1, onChange: () => {} })
+      .addCheckbox('Loop', { value: true, onChange: () => {} });
+
+    // ── Left panel — Outliner-first. Transform is handled by the canvas gizmo
+    // (drag handles + G/R/S/Esc keyboard shortcuts), so no Vec3 sliders here. ──
+
+    const outliner = ui2.addFolder('Outliner');
+    const listEl = document.createElement('div');
+    listEl.className = 'dui-list';
+    const items = ['Hero', 'Sword', 'Camera Rig', 'Light A', 'Light B'];
+    let selected = 0;
+    const visState = items.map(() => true);
+
+    function renderOutliner() {
+      listEl.innerHTML = '';
+      items.forEach((name, i) => {
+        const item = document.createElement('div');
+        item.className = 'dui-list-item' + (i === selected ? ' dui-selected' : '');
+        item.style.cursor = 'pointer';
+        item.innerHTML = `
+          <span class="dui-name">${name}</span>
+          <span class="dui-actions">
+            <button title="${visState[i] ? 'Hide' : 'Show'}">${visState[i] ? '👁' : '○'}</button>
+          </span>`;
+        // Click row → select
+        item.addEventListener('click', (e) => {
+          if (e.target.closest('.dui-actions')) return;
+          selected = i;
+          renderOutliner();
+        });
+        // Toggle visibility button
+        item.querySelector('.dui-actions button').addEventListener('click', (e) => {
+          e.stopPropagation();
+          visState[i] = !visState[i];
+          renderOutliner();
+        });
+        listEl.appendChild(item);
+      });
+    }
+    renderOutliner();
+    outliner.addRaw(listEl);
+
+    ui2.addFolder('Display')
+      .addCheckbox('Grid',    { value: true,  tooltip: 'Show floor grid' })
+      .addCheckbox('Axes',    { value: true,  tooltip: 'Show world axes (XYZ = R/G/B)' })
+      .addCheckbox('Helpers', { value: false, tooltip: 'Show light & camera helpers' })
+      .addSelect('Shading', { options: ['Solid', 'Material', 'Rendered'], value: 'Material', tooltip: 'How meshes are shaded in the viewport' });
+
+    // ── 3D Gizmos folder — pick a manipulator type to attach to selection ──
+    const gizmosFolder = ui2.addFolder('Gizmos');
+    const gizmoTypes = [
+      { id: 'placement', label: 'Placement',  desc: 'Drop on ground plane with rotation handle' },
+      { id: 'mirror',    label: 'Mirror',     desc: 'Mirror across X, Y, or Z axis' },
+      { id: 'vr',        label: 'VR',         desc: 'Position a VR viewpoint with face rings' },
+      { id: 'transpose', label: 'Transpose',  desc: 'ZBrush-style line + handles for pose chains' },
+      { id: 'cursor',    label: '3D Cursor',  desc: 'Place a reference point (RGB = XYZ axes)' },
+      { id: 'shear',     label: 'Shear',      desc: 'Skew the object along colored bars' },
+      { id: 'camera',    label: 'Camera',     desc: 'Position a camera with frustum + rotation rings' },
+    ];
+    gizmoTypes.forEach(g => {
+      gizmosFolder.addButton(g.label, { onClick: () => {}, tooltip: g.desc });
+    });
+
+    // ── Theme switcher (Dark / Light only) ──
+    document.querySelectorAll('.theme-switcher button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.theme-switcher button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const themeName = btn.dataset.theme;
+        ui.panel.setTheme(themeName);
+        ui2.panel.setTheme(themeName);
+      });
+    });
+
+    console.log('Ghost Panel preview ready');
+  </script>
+</body>
+</html>

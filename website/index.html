@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ghost Panel</title>
+  <meta name="description" content="A self-aware control panel for the web. Drops into any Three.js scene, 2D canvas, or DOM page." />
+  <!-- This landing page is a light-only doc layout, so a single theme-color
+       matching --bg keeps mobile browser chrome (Safari/Chrome address bar)
+       consistent with the page rather than a guessed dark variant. -->
+  <meta name="theme-color" content="#fafafa">
+  <meta name="color-scheme" content="light">
+  <meta name="robots" content="index, follow">
+
+  <link rel="icon" type="image/png" sizes="32x32" href="../assets/branding/logo-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="../assets/branding/logo-192.png">
+  <link rel="apple-touch-icon" href="../assets/branding/logo-192.png">
+
+  <!-- Open Graph (Facebook, LinkedIn, Slack, Discord, iMessage…). The image
+       is the PNG, not the WebP — most social crawlers don't render WebP. Paths
+       stay site-relative to match the favicons above; there's no production
+       domain configured to anchor absolute URLs against (add og:url + a
+       canonical link, and switch these to absolute, once the site has a home). -->
+  <meta property="og:site_name" content="Ghost Panel">
+  <meta property="og:title" content="Ghost Panel">
+  <meta property="og:description" content="Drop-in workflow-aware control panel for Three.js / 2D canvas / web.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="../assets/branding/hero.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1400">
+  <meta property="og:image:height" content="1400">
+  <meta property="og:image:alt" content="Ghost Panel — a debug control panel docked beside a 3D scene.">
+
+  <!-- Twitter / X card. summary_large_image gives the wide preview. -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Ghost Panel">
+  <meta name="twitter:description" content="Drop-in workflow-aware control panel for Three.js / 2D canvas / web.">
+  <meta name="twitter:image" content="../assets/branding/hero.png">
+  <meta name="twitter:image:alt" content="Ghost Panel — a debug control panel docked beside a 3D scene.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #fafafa;
+      --bg-soft:     #f4f4f5;
+      --bg-code:     #f6f6f7;
+      --line:        rgba(10, 10, 12, 0.08);
+      --line-strong: rgba(10, 10, 12, 0.16);
+      --fg:          #0a0a0c;
+      --fg-soft:     #3a3a3f;
+      --fg-mute:     #6b6b72;
+      --fg-faint:    #9a9aa1;
+      --accent:      #b8181e;
+
+      --font-sans:   ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono:   "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+      --maxw:        720px;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font-sans);
+      font-size: 17px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid currentColor;
+      transition: opacity 120ms ease;
+    }
+    a:hover { opacity: 0.7; }
+    a.plain { color: var(--fg); border-bottom: none; }
+    a.plain:hover { color: var(--accent); opacity: 1; }
+
+    code, pre, kbd, .mono { font-family: var(--font-mono); }
+    code {
+      background: var(--bg-code);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 14.5px;
+      color: var(--fg);
+    }
+    kbd {
+      background: var(--bg-code);
+      border: 1px solid var(--line);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      padding: 0 5px;
+      font-size: 13px;
+      color: var(--fg);
+    }
+
+    /* ── Layout ──────────────────────────────────────────── */
+    .page {
+      max-width: var(--maxw);
+      margin: 0 auto;
+      padding: 56px 28px 96px;
+    }
+
+    /* ── Top nav (super-minimal) ─────────────────────────── */
+    .topnav {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      padding-bottom: 56px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+    }
+    .topnav-brand {
+      display: flex; align-items: center; gap: 10px;
+      color: var(--fg);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      border-bottom: none;
+    }
+    .topnav-brand img { width: 22px; height: 22px; }
+    .topnav-links {
+      margin-left: auto;
+      display: flex;
+      gap: 18px;
+    }
+    .topnav-links a {
+      color: var(--fg-mute);
+      border-bottom: none;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .topnav-links a:hover { color: var(--accent); opacity: 1; }
+
+    /* ── Hero ────────────────────────────────────────────── */
+    .hero { margin-bottom: 56px; }
+
+    .hero-img {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-width: 720px;
+      margin-bottom: 32px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    h1 {
+      font-size: 38px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+    .lede {
+      font-size: 19px;
+      color: var(--fg-soft);
+      line-height: 1.55;
+      margin-bottom: 18px;
+    }
+    .meta {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--fg-mute);
+      display: flex;
+      gap: 18px;
+      align-items: center;
+    }
+    .meta a { color: var(--accent); border-bottom-style: dotted; }
+
+    /* ── Section structure ───────────────────────────────── */
+    section {
+      margin: 56px 0;
+      scroll-margin-top: 24px;
+    }
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin-bottom: 14px;
+    }
+    h3 {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0;
+      margin: 28px 0 8px;
+      color: var(--fg);
+    }
+    p { color: var(--fg-soft); margin-bottom: 14px; }
+    p + p { margin-top: 8px; }
+    section > p:first-of-type { color: var(--fg-soft); }
+    ul, ol {
+      margin: 12px 0 18px 22px;
+      color: var(--fg-soft);
+    }
+    li { margin: 4px 0; }
+
+    /* ── Code blocks ─────────────────────────────────────── */
+    pre {
+      background: var(--bg-code);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px 20px;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      line-height: 1.65;
+      color: var(--fg);
+      overflow-x: auto;
+      margin: 14px 0 18px;
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+      font-size: inherit;
+    }
+    .tok-key { color: #7c3aed; }
+    .tok-str { color: #197a3e; }
+    .tok-fn  { color: #1d4ed8; }
+    .tok-cm  { color: var(--fg-mute); font-style: italic; }
+    .tok-tag { color: #c2410c; }
+    .tok-num { color: #a16207; }
+    .tok-prop { color: #b91c1c; }
+
+    /* ── Framework tab block ─────────────────────────────── */
+    .fw-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 14px;
+    }
+    .fw-tab {
+      all: unset;
+      cursor: pointer;
+      padding: 8px 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      color: var(--fg-mute);
+      border-bottom: 2px solid transparent;
+      transition: color 120ms ease, border-color 120ms ease;
+      margin-bottom: -1px;
+    }
+    .fw-tab:hover { color: var(--fg); }
+    .fw-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .fw-panel pre { margin-top: 0; }
+
+    /* ── API reference table ─────────────────────────────── */
+    .api-block {
+      border-top: 1px solid var(--line);
+      padding-top: 18px;
+      margin-top: 24px;
+    }
+    .api-sig {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--fg);
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .api-sig .tok-fn { font-weight: 600; }
+    .api-desc {
+      color: var(--fg-soft);
+      font-size: 15px;
+      margin-bottom: 10px;
+    }
+    .api-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 4px;
+      font-size: 14px;
+    }
+    .api-table th, .api-table td {
+      text-align: left;
+      padding: 8px 12px 8px 0;
+      vertical-align: top;
+      border-top: 1px solid var(--line);
+      color: var(--fg-soft);
+    }
+    .api-table th {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--fg-mute);
+      font-weight: 600;
+    }
+    .api-table td.name {
+      font-family: var(--font-mono);
+      color: var(--fg);
+      white-space: nowrap;
+    }
+    .api-table td.type {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--fg-mute);
+      white-space: nowrap;
+    }
+
+    /* ── Inline demo list ────────────────────────────────── */
+    .demo-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .demo-list li {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .demo-list li:last-child { border-bottom: none; }
+    .demo-list .tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+      width: 56px;
+      flex-shrink: 0;
+    }
+    .demo-list .demo-link {
+      font-weight: 500;
+      color: var(--fg);
+      border-bottom: none;
+    }
+    .demo-list .demo-link:hover { color: var(--accent); opacity: 1; }
+    .demo-list .demo-desc {
+      color: var(--fg-mute);
+      font-size: 14.5px;
+      margin-left: auto;
+      text-align: right;
+      max-width: 360px;
+    }
+
+    /* ── Footer ──────────────────────────────────────────── */
+    footer {
+      margin-top: 96px;
+      padding-top: 32px;
+      border-top: 1px solid var(--line);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      color: var(--fg-mute);
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    footer a { color: var(--fg-mute); border-bottom: none; }
+    footer a:hover { color: var(--accent); }
+    footer .right { margin-left: auto; display: flex; gap: 18px; }
+
+    /* ── Animations ──────────────────────────────────────── */
+    /* Stage 1: progressive page entrance.  Each region fades + lifts in
+       sequence so the eye walks the page top-down without anything
+       feeling abrupt.  Keep the distances small (8px) and the durations
+       tight (~600ms) — anything bigger reads as decorative jank on a
+       documentation page. */
+    @keyframes ghost-rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes ghost-fade {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    /* Hero image gets a gentler scale-in to match the dialed-back feel. */
+    @keyframes ghost-hero-in {
+      from { opacity: 0; transform: scale(1.02); filter: blur(4px); }
+      to   { opacity: 1; transform: scale(1);    filter: blur(0); }
+    }
+
+    .topnav   { animation: ghost-fade   500ms ease-out both; }
+    .hero-img { animation: ghost-hero-in 900ms cubic-bezier(.2,.7,.2,1) both; animation-delay: 60ms; }
+    .hero h1  { animation: ghost-rise   650ms cubic-bezier(.2,.7,.2,1) both; animation-delay: 320ms; }
+    .hero .lede { animation: ghost-rise 650ms cubic-bezier(.2,.7,.2,1) both; animation-delay: 420ms; }
+    .hero .meta { animation: ghost-rise 650ms cubic-bezier(.2,.7,.2,1) both; animation-delay: 520ms; }
+
+    /* Stage 2: scroll-revealed sections — a per-child cascade.  JS tags
+       each section .reveal and every direct child .r-child with a
+       staggered --d delay; when the section crosses the viewport JS adds
+       .reveal-on and the children fade-and-rise in sequence, so content
+       walks in instead of popping as one block.  The hidden state lives
+       on .r-child (added by JS), so no-JS / print / screen readers see
+       everything; reduced-motion gets the no-op rules below. */
+    .reveal .r-child {
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 620ms cubic-bezier(.2,.7,.2,1),
+                  transform 620ms cubic-bezier(.2,.7,.2,1);
+      transition-delay: var(--d, 0ms);
+    }
+    .reveal.reveal-on .r-child {
+      opacity: 1;
+      transform: none;
+    }
+
+    /* A short accent tick draws itself under each section heading the
+       moment that section reveals — on-brand red, left-anchored. */
+    h2 { position: relative; }
+    h2::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: -7px;
+      height: 2px;
+      width: 0;
+      background: var(--accent);
+      transition: width 600ms cubic-bezier(.2,.7,.2,1);
+      transition-delay: 220ms;
+    }
+    .reveal.reveal-on h2::after { width: 28px; }
+
+    /* Reading-progress hairline pinned to the top of the viewport; its
+       width tracks scroll fraction.  Decorative + pointer-transparent. */
+    .scroll-progress {
+      position: fixed;
+      top: 0; left: 0;
+      height: 2px;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent), #e0565b);
+      z-index: 100;
+      transition: width 90ms linear;
+      pointer-events: none;
+    }
+
+    /* Tab content cross-fade — tied to the .swap class set when the
+       user clicks a tab.  Doesn't fight the structural snippet swap;
+       just smooths the transition so the new code doesn't pop in. */
+    .fw-panel pre {
+      transition: opacity 220ms cubic-bezier(.2,.7,.2,1);
+    }
+    .fw-panel pre.swap-out { opacity: 0; }
+
+    /* Active tab underline glides instead of snapping — done via a
+       single border-bottom rule, kept simple to avoid layout shift. */
+    .fw-tab {
+      transition: color 150ms ease, border-color 240ms cubic-bezier(.2,.7,.2,1);
+    }
+
+    /* Hero image hover — a barely-there lift + soft shadow so the page
+       feels alive without distracting from the lede underneath. */
+    .hero-img {
+      transition: transform 500ms cubic-bezier(.2,.7,.2,1),
+                  box-shadow 500ms cubic-bezier(.2,.7,.2,1);
+    }
+    .hero-img:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 18px 40px -24px rgba(10,10,12,0.35);
+    }
+
+    /* Brand mark gives a playful tip on hover. */
+    .topnav-brand img { transition: transform 300ms cubic-bezier(.2,.7,.2,1); }
+    .topnav-brand:hover img { transform: scale(1.12) rotate(-6deg); }
+
+    /* Nav links grow an underline from the left on hover. */
+    .topnav-links a { position: relative; }
+    .topnav-links a::after {
+      content: "";
+      position: absolute;
+      left: 0; bottom: -4px;
+      height: 1px; width: 0;
+      background: currentColor;
+      transition: width 200ms cubic-bezier(.2,.7,.2,1);
+    }
+    .topnav-links a:hover::after { width: 100%; }
+
+    /* Demo rows: an accent rail slides in, the row nudges right, and a
+       trailing arrow leans forward — all on hover. */
+    .demo-list li {
+      border-left: 2px solid transparent;
+      padding-left: 0;
+      transition: border-color 220ms cubic-bezier(.2,.7,.2,1),
+                  padding-left 220ms cubic-bezier(.2,.7,.2,1);
+    }
+    .demo-list li:hover {
+      border-left-color: var(--accent);
+      padding-left: 12px;
+    }
+    .demo-list .demo-link::after {
+      content: " →";
+      display: inline-block;
+      transition: transform 220ms cubic-bezier(.2,.7,.2,1);
+    }
+    .demo-list li:hover .demo-link::after { transform: translateX(4px); }
+
+    /* In-page anchor jumps glide (reduced-motion turns this off below). */
+    html { scroll-behavior: smooth; }
+
+    /* Respect "reduce motion" — drop every entrance / auto-play
+       animation, but leave hover transitions intact (they're tied to
+       user intent).  Static end-states are forced so nothing stays
+       hidden.  Note: entrance elements only get animation:none so their
+       hover transforms survive; .r-child / tab swaps need the full
+       neutralization since their hidden state is plain CSS. */
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .topnav, .hero-img, .hero h1, .hero .lede, .hero .meta {
+        animation: none !important;
+      }
+      .reveal .r-child, .fw-panel pre {
+        animation: none !important;
+        transition: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+        filter: none !important;
+      }
+      h2::after { width: 28px !important; transition: none !important; }
+      .scroll-progress { display: none !important; }
+    }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @media (max-width: 540px) {
+      .page { padding: 36px 22px 64px; }
+      h1 { font-size: 30px; }
+      .lede { font-size: 17px; }
+      .demo-list li { flex-direction: column; gap: 4px; align-items: flex-start; }
+      .demo-list .demo-desc { text-align: left; max-width: none; margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="scroll-progress" aria-hidden="true"></div>
+
+<div class="page">
+
+  <!-- ═══ Top nav ═══════════════════════════════════════════════ -->
+  <nav class="topnav">
+    <a class="topnav-brand" href="#">
+      <img src="../assets/branding/logo-32.png" alt="">
+      Ghost Panel
+    </a>
+    <div class="topnav-links">
+      <a href="#install">Install</a>
+      <a href="#frameworks">Frameworks</a>
+      <a href="#api-reference">API</a>
+      <a href="#demos">Demos</a>
+    </div>
+  </nav>
+
+  <!-- ═══ Hero ══════════════════════════════════════════════════ -->
+  <section class="hero">
+    <img
+      class="hero-img"
+      src="../assets/branding/hero.webp"
+      alt="Ghost Panel"
+      width="800"
+      decoding="async"
+    />
+    <h1>Ghost Panel.</h1>
+    <p class="lede">A self-aware control panel for the web. Drops into any Three.js scene, 2D canvas, or DOM page — auto-detects what's there, mounts the right controls, and stays out of the way until you press <kbd>Shift+D</kbd>.</p>
+    <p class="meta">
+      <span>v0.1</span>
+      <span>MIT</span>
+      <a href="https://github.com/" target="_blank" rel="noopener">GitHub →</a>
+    </p>
+  </section>
+
+  <!-- ═══ Introduction ══════════════════════════════════════════ -->
+  <section id="introduction">
+    <h2>Introduction</h2>
+    <p>Ghost Panel is a single function — <code>createGhostPanel(options)</code> — that walks your project on load, registers every named mesh / light / camera / DOM adapter it finds, and surfaces the right controls on selection.</p>
+    <p>It's framework-agnostic at the core, ships first-party adapters for React, Solid, Svelte, and Vue, and has a UMD bundle for plain <code>&lt;script&gt;</code> tags. Three.js is an optional peer dependency.</p>
+  </section>
+
+  <!-- ═══ Install ═══════════════════════════════════════════════ -->
+  <section id="install">
+    <h2>Install</h2>
+    <pre>npm install ghost-panel
+npm install three     <span class="tok-cm"># peer dep, only if you're using Three.js</span></pre>
+    <p>Or load the UMD bundle directly:</p>
+    <pre><span class="tok-tag">&lt;script</span> <span class="tok-prop">src</span>=<span class="tok-str">"https://unpkg.com/ghost-panel/dist/ghost-panel.umd.js"</span><span class="tok-tag">&gt;&lt;/script&gt;</span></pre>
+  </section>
+
+  <!-- ═══ Quick start ═══════════════════════════════════════════ -->
+  <section id="quick-start">
+    <h2>Quick start</h2>
+    <p>Pass your scene + camera + renderer. Ghost Panel auto-detects 3D, registers everything in the scene, and mounts the right workflows.</p>
+    <pre><span class="tok-key">import</span> { <span class="tok-fn">createGhostPanel</span> } <span class="tok-key">from</span> <span class="tok-str">'ghost-panel'</span>;
+
+<span class="tok-key">const</span> ui = <span class="tok-fn">createGhostPanel</span>({
+  scene,
+  camera,
+  renderer,
+  title: <span class="tok-str">'Inspector'</span>,
+});</pre>
+    <p>Open localhost. Press <kbd>Shift+D</kbd> to toggle panels. Click any object to inspect it. <kbd>Shift+A</kbd> opens the add menu.</p>
+  </section>
+
+  <!-- ═══ Frameworks (tabbed) ══════════════════════════════════ -->
+  <section id="frameworks">
+    <h2>Frameworks</h2>
+    <p>The core ESM is framework-agnostic. First-party adapters wire lifecycle for every popular front-end. Pick yours:</p>
+
+    <div class="fw-tabs" role="tablist">
+      <button class="fw-tab active" data-tab="js">JavaScript</button>
+      <button class="fw-tab" data-tab="html">HTML</button>
+      <button class="fw-tab" data-tab="react">React</button>
+      <button class="fw-tab" data-tab="solid">Solid</button>
+      <button class="fw-tab" data-tab="svelte">Svelte</button>
+      <button class="fw-tab" data-tab="vue">Vue 3</button>
+      <button class="fw-tab" data-tab="agents">AI Agents</button>
+    </div>
+    <div class="fw-panel">
+      <pre id="fw-code"></pre>
+    </div>
+  </section>
+
+  <!-- ═══ API Reference ════════════════════════════════════════ -->
+  <section id="api-reference">
+    <h2>API reference</h2>
+    <p>Every method on the <code>ui</code> handle returned by <code>createGhostPanel(options)</code>. Options are documented inline.</p>
+
+    <div class="api-block">
+      <div class="api-sig"><span class="tok-fn">createGhostPanel</span>(<span class="tok-prop">options</span>) → <span class="tok-fn">UI</span></div>
+      <div class="api-desc">Mount the panel. Returns a handle with every method below.</div>
+      <table class="api-table">
+        <tr><th>Option</th><th>Type</th><th>Description</th></tr>
+        <tr><td class="name">scene</td><td class="type">THREE.Scene</td><td>Auto-detects 3D workflow + scans for objects.</td></tr>
+        <tr><td class="name">camera</td><td class="type">THREE.Camera</td><td>Used by the click-to-select raycaster and gizmo.</td></tr>
+        <tr><td class="name">renderer</td><td class="type">THREE.WebGLRenderer</td><td>Source of the canvas for pointer events.</td></tr>
+        <tr><td class="name">controls</td><td class="type">OrbitControls</td><td>Optional — focus / POV camera switches sync target here.</td></tr>
+        <tr><td class="name">workflow</td><td class="type">string[]</td><td>Force-enable specific workflows (skips auto-detection).</td></tr>
+        <tr><td class="name">workflowOpts</td><td class="type">object</td><td>Per-workflow config — <code>background</code>, <code>backgroundTargets</code>, <code>tracks</code>, <code>uniforms</code>, etc.</td></tr>
+        <tr><td class="name">title</td><td class="type">string</td><td>Inspector panel title (default <code>'Inspector'</code>).</td></tr>
+        <tr><td class="name">scenePanel</td><td class="type">boolean</td><td>Show the left scene/outliner panel (default <code>true</code>).</td></tr>
+        <tr><td class="name">visible</td><td class="type">boolean</td><td>Initial visibility (default <code>true</code>).</td></tr>
+        <tr><td class="name">liquidGlass</td><td class="type">boolean</td><td>Apple-style backdrop blur skin.</td></tr>
+      </table>
+    </div>
+
+    <div class="api-block">
+      <div class="api-sig">ui.<span class="tok-fn">addFolder</span>(<span class="tok-prop">name</span>, <span class="tok-prop">opts</span>?) → <span class="tok-fn">Folder</span></div>
+      <div class="api-desc">Add a collapsible folder. Returns a fluent <code>Folder</code> with <code>addSlider</code>, <code>addColor</code>, <code>addCheckbox</code>, <code>addSelect</code>, <code>addCurveEditor</code>, <code>addVec3</code>, <code>addDial</code>, <code>addButton</code>, <code>addTrigger</code>, <code>addSequence</code>, and more. Every value control auto-records undo.</div>
+    </div>
+
+    <div class="api-block">
+      <div class="api-sig">ui.<span class="tok-fn">getFolder</span>(<span class="tok-prop">name</span>) → <span class="tok-fn">Folder</span></div>
+      <div class="api-desc">Look up an existing folder (auto-added by a workflow, or by an earlier <code>addFolder</code> call).</div>
+    </div>
+
+    <div class="api-block">
+      <div class="api-sig">ui.objectManager.<span class="tok-fn">select</span>(<span class="tok-prop">name</span>, { <span class="tok-prop">additive</span>? }) → <span class="tok-fn">void</span></div>
+      <div class="api-desc">Select an object. Pass <code>{ additive: true }</code> to shift-click style add it to the multi-selection.</div>
+    </div>
+
+    <div class="api-block">
+      <div class="api-sig">ui.objectManager.<span class="tok-fn">getSelectedNames</span>() → <span class="tok-fn">string[]</span></div>
+      <div class="api-desc">Every currently-selected name (primary first/last in insertion order).</div>
+    </div>
+
+    <div class="api-block">
+      <div class="api-sig">ui.<span class="tok-fn">_group</span>(<span class="tok-prop">names</span>?) → <span class="tok-fn">string</span></div>
+      <div class="api-desc">Group the named (or currently multi-selected) objects under a new <code>THREE.Group</code>. Children keep their world transform. Pushes undo. Bound to <kbd>⌘G</kbd>.</div>
+    </div>
+
+    <div class="api-block">
+      <div class="api-sig">ui.<span class="tok-fn">_ungroup</span>(<span class="tok-prop">name</span>) → <span class="tok-fn">string[]</span></div>
+      <div class="api-desc">Lift every direct child of the named group back to the scene root. Inverse of <code>_group</code>. Bound to <kbd>⇧⌘G</kbd>.</div>
+    </div>
+
+    <div class="api-block">
+      <div class="api-sig">ui.<span class="tok-fn">_copy</span>(<span class="tok-prop">name</span>?) · ui.<span class="tok-fn">_paste</span>() · ui.<span class="tok-fn">_duplicate</span>(<span class="tok-prop">name</span>?)</div>
+      <div class="api-desc">Programmatic clipboard. Bound to <kbd>⌘C</kbd> / <kbd>⌘V</kbd> / <kbd>⌘D</kbd>. Three.js Object3Ds round-trip via <code>.clone()</code>; plain 2D shapes deep-clone the bag-of-numbers.</div>
+    </div>
+
+    <div class="api-block">
+      <div class="api-sig">ui._undo.<span class="tok-fn">push</span>(<span class="tok-prop">command</span>) · ui._undo.<span class="tok-fn">undo</span>() · ui._undo.<span class="tok-fn">redo</span>()</div>
+      <div class="api-desc">Workflow-agnostic undo stack. A command is <code>{ undo(): void, redo(): void, label?: string, coalesceKey?: string }</code>. Cmd+Z / Cmd+Shift+Z are wired by default.</div>
+    </div>
+
+    <div class="api-block">
+      <div class="api-sig">ui.<span class="tok-fn">show</span>() · ui.<span class="tok-fn">hide</span>() · ui.<span class="tok-fn">toggle</span>() · ui.<span class="tok-fn">bindToggleKey</span>(<span class="tok-prop">key</span>, <span class="tok-prop">opts</span>)</div>
+      <div class="api-desc">Visibility control. The default toggle key is <kbd>Shift+D</kbd>.</div>
+    </div>
+
+    <div class="api-block">
+      <div class="api-sig">ui.<span class="tok-fn">dispose</span>() → <span class="tok-fn">void</span></div>
+      <div class="api-desc">Tear down every panel, listener, and observer. Safe to call multiple times.</div>
+    </div>
+  </section>
+
+  <!-- ═══ Live demos ═══════════════════════════════════════════ -->
+  <section id="demos">
+    <h2>Live demos</h2>
+    <p>Four runnable examples. Each one boots Ghost Panel against a different host:</p>
+    <ul class="demo-list">
+      <li>
+        <span class="tag">3D</span>
+        <a class="demo-link" href="../ghost-panel-demo.html">Three.js scene</a>
+        <span class="demo-desc">Cube · Sphere · TorusKnot · POV camera. Material folder mounts on selection.</span>
+      </li>
+      <li>
+        <span class="tag">2D</span>
+        <a class="demo-link" href="../ghost-panel-2d-demo.html">Canvas 2D</a>
+        <span class="demo-desc">Bound circles driving Canvas2D via the F-Curve graph editor.</span>
+      </li>
+      <li>
+        <span class="tag">Web</span>
+        <a class="demo-link" href="../ghost-panel-web-demo.html">DOM adapters</a>
+        <span class="demo-desc">Card · pill · CTA — plain HTML inspected like meshes.</span>
+      </li>
+      <li>
+        <span class="tag">Grid</span>
+        <a class="demo-link" href="../ghost-panel-grid-demo.html">Infinite canvas</a>
+        <span class="demo-desc">625-cell CSS-perspective fly-through with depth fade and a poster gallery.</span>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ═══ Footer ═══════════════════════════════════════════════ -->
+  <footer>
+    <span>Ghost Panel · v0.1</span>
+    <div class="right">
+      <a href="https://github.com/" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://www.npmjs.com/" target="_blank" rel="noopener">npm</a>
+      <span>MIT</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+  // ── Framework tab switcher ────────────────────────────────────
+  const SNIPPETS = {
+    js:
+`<span class="tok-key">import</span> { <span class="tok-fn">createGhostPanel</span> } <span class="tok-key">from</span> <span class="tok-str">'ghost-panel'</span>;
+
+<span class="tok-key">const</span> ui = <span class="tok-fn">createGhostPanel</span>({
+  scene,
+  camera,
+  renderer,
+});`,
+
+    html:
+`<span class="tok-tag">&lt;script</span> <span class="tok-prop">src</span>=<span class="tok-str">"https://unpkg.com/ghost-panel/dist/ghost-panel.umd.js"</span><span class="tok-tag">&gt;&lt;/script&gt;</span>
+
+<span class="tok-tag">&lt;script&gt;</span>
+  <span class="tok-key">const</span> ui = <span class="tok-fn">GhostPanel.createGhostPanel</span>({
+    title: <span class="tok-str">'Inspector'</span>,
+  });
+<span class="tok-tag">&lt;/script&gt;</span>`,
+
+    react:
+`<span class="tok-key">import</span> { <span class="tok-fn">GhostPanel</span> } <span class="tok-key">from</span> <span class="tok-str">'ghost-panel/react'</span>;
+
+<span class="tok-key">export default function</span> <span class="tok-fn">App</span>() {
+  <span class="tok-key">return</span> (
+    <span class="tok-tag">&lt;&gt;</span>
+      <span class="tok-tag">&lt;YourCanvas</span> <span class="tok-tag">/&gt;</span>
+      <span class="tok-tag">&lt;GhostPanel</span> <span class="tok-prop">options</span>={{ title: <span class="tok-str">'Inspector'</span> }} <span class="tok-tag">/&gt;</span>
+    <span class="tok-tag">&lt;/&gt;</span>
+  );
+}`,
+
+    solid:
+`<span class="tok-key">import</span> { <span class="tok-fn">GhostPanel</span> } <span class="tok-key">from</span> <span class="tok-str">'ghost-panel/solid'</span>;
+
+<span class="tok-key">export default function</span> <span class="tok-fn">App</span>() {
+  <span class="tok-key">return</span> (
+    <span class="tok-tag">&lt;&gt;</span>
+      <span class="tok-tag">&lt;YourCanvas</span> <span class="tok-tag">/&gt;</span>
+      <span class="tok-tag">&lt;GhostPanel</span> <span class="tok-prop">options</span>={{ title: <span class="tok-str">'Inspector'</span> }} <span class="tok-tag">/&gt;</span>
+    <span class="tok-tag">&lt;/&gt;</span>
+  );
+}`,
+
+    svelte:
+`<span class="tok-tag">&lt;script&gt;</span>
+  <span class="tok-key">import</span> { <span class="tok-fn">ghostPanel</span> } <span class="tok-key">from</span> <span class="tok-str">'ghost-panel/svelte'</span>;
+<span class="tok-tag">&lt;/script&gt;</span>
+
+<span class="tok-tag">&lt;YourCanvas</span> <span class="tok-tag">/&gt;</span>
+<span class="tok-tag">&lt;div</span> <span class="tok-prop">use:</span><span class="tok-fn">ghostPanel</span>={{
+  options: { title: <span class="tok-str">'Inspector'</span> },
+}} <span class="tok-tag">/&gt;</span>`,
+
+    vue:
+`<span class="tok-tag">&lt;script setup&gt;</span>
+<span class="tok-key">import</span> { <span class="tok-fn">GhostPanel</span> } <span class="tok-key">from</span> <span class="tok-str">'ghost-panel/vue'</span>;
+<span class="tok-tag">&lt;/script&gt;</span>
+
+<span class="tok-tag">&lt;template&gt;</span>
+  <span class="tok-tag">&lt;YourCanvas</span> <span class="tok-tag">/&gt;</span>
+  <span class="tok-tag">&lt;GhostPanel</span> <span class="tok-prop">:options</span>=<span class="tok-str">"{ title: 'Inspector' }"</span> <span class="tok-tag">/&gt;</span>
+<span class="tok-tag">&lt;/template&gt;</span>`,
+
+    agents:
+`<span class="tok-cm"># Ghost Panel is npm-installable and ships AGENTS.md.</span>
+<span class="tok-cm"># Claude Code / Codex / Cursor read the skills schema</span>
+<span class="tok-cm"># from AGENTS.md and call createGhostPanel like any host:</span>
+
+<span class="tok-key">import</span> { <span class="tok-fn">createGhostPanel</span> } <span class="tok-key">from</span> <span class="tok-str">'ghost-panel'</span>;
+<span class="tok-key">const</span> ui = <span class="tok-fn">createGhostPanel</span>({ scene, camera, renderer });
+
+<span class="tok-cm"># ui.skills.describe()  → capability catalog</span>
+<span class="tok-cm"># ui.skills.register({…}) → add a skill at runtime</span>`,
+  };
+
+  const code = document.getElementById('fw-code');
+  const tabs = document.querySelectorAll('.fw-tab');
+
+  function selectTab(name, animate = false) {
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    if (!SNIPPETS[name]) return;
+    if (!animate) {
+      code.innerHTML = SNIPPETS[name];
+      return;
+    }
+    // Crossfade: fade out → swap text → fade in. Two animation frames
+    // give the browser a chance to commit the opacity:0 state before
+    // we restore opacity:1 with new content, so the transition fires.
+    code.classList.add('swap-out');
+    setTimeout(() => {
+      code.innerHTML = SNIPPETS[name];
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => code.classList.remove('swap-out'));
+      });
+    }, 200);
+  }
+
+  tabs.forEach(t => t.addEventListener('click', () => selectTab(t.dataset.tab, true)));
+  selectTab('js');
+
+  // ── Scroll-reveal: tag every section except the hero, observe each ──
+  // The hero already animates in via CSS keyframes on load. Subsequent
+  // sections fade-and-rise as they enter the viewport. Reduced-motion
+  // users get the no-op styles via the @media rule above.
+  const sections = document.querySelectorAll(
+    'section#introduction, section#install, section#quick-start, ' +
+    'section#frameworks, section#api-reference, section#demos, footer'
+  );
+  sections.forEach(s => s.classList.add('reveal'));
+
+  // Tag each section's direct children .r-child with a staggered --d
+  // delay so the section cascades in instead of popping as one block.
+  // The demo list staggers its rows individually rather than as one
+  // <ul>, and delays are capped so tall sections don't crawl in.
+  sections.forEach(section => {
+    let i = 0;
+    for (const child of section.children) {
+      if (child.matches('ul.demo-list')) {
+        Array.from(child.children).forEach((li, j) => {
+          li.classList.add('r-child');
+          li.style.setProperty('--d', Math.min(i + j, 9) * 70 + 'ms');
+        });
+      } else {
+        child.classList.add('r-child');
+        child.style.setProperty('--d', Math.min(i, 9) * 70 + 'ms');
+      }
+      i++;
+    }
+  });
+
+  // Reveal any section whose top has crossed into (or above) the
+  // viewport. Used by both the IntersectionObserver (efficient for slow
+  // scrolls) and a passive scroll listener (catches fast jumps that
+  // IO doesn't fire intermediate callbacks for, like Cmd+End).
+  function sweepReveals() {
+    const fold = window.innerHeight * 0.92;   // matches IO rootMargin -10%
+    sections.forEach(s => {
+      if (s.classList.contains('reveal-on')) return;
+      const r = s.getBoundingClientRect();
+      if (r.top < fold) s.classList.add('reveal-on');
+    });
+  }
+
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('reveal-on');
+          io.unobserve(entry.target);
+        }
+      }
+    }, { rootMargin: '0px 0px -10% 0px', threshold: 0.05 });
+    sections.forEach(s => io.observe(s));
+    // Scroll listener catches fast scrolls + anchor jumps that IO
+    // alone misses. rAF-debounced so it's cheap.
+    let queued = false;
+    window.addEventListener('scroll', () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => { queued = false; sweepReveals(); });
+    }, { passive: true });
+    // Initial sweep handles in-view-on-load and #api-reference anchor jumps.
+    requestAnimationFrame(sweepReveals);
+  } else {
+    // Old browser fallback — show everything immediately.
+    sections.forEach(s => s.classList.add('reveal-on'));
+  }
+
+  // ── Reading-progress hairline ─────────────────────────────────
+  // Width tracks how far down the document we've scrolled. rAF-debounced
+  // and passive so it stays cheap; the @media rule hides it entirely for
+  // reduced-motion users (JS still runs but the bar is display:none).
+  const progress = document.querySelector('.scroll-progress');
+  if (progress) {
+    let pQueued = false;
+    const updateProgress = () => {
+      const doc = document.documentElement;
+      const max = doc.scrollHeight - doc.clientHeight;
+      const y = window.pageYOffset || doc.scrollTop || 0;
+      progress.style.width = (max > 0 ? Math.min(1, y / max) * 100 : 0) + '%';
+    };
+    window.addEventListener('scroll', () => {
+      if (pQueued) return;
+      pQueued = true;
+      requestAnimationFrame(() => { pQueued = false; updateProgress(); });
+    }, { passive: true });
+    window.addEventListener('resize', updateProgress, { passive: true });
+    updateProgress();
+  }
+</script>
+
+</body>
+</html>

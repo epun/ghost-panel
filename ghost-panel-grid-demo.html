@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./assets/branding/logo-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./assets/branding/logo-192.png">
+  <link rel="apple-touch-icon" href="./assets/branding/logo-192.png">
+  <title>Ghost Panel — infinite canvas · Neo-Tokyo</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      background: #ffffff; color: #f5e6ce;
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      overscroll-behavior: none;
+    }
+    /* Subtle radial vignette so cells fading to bg look like they're
+       fading into atmosphere rather than just disappearing. */
+    .stage {
+      position: fixed; inset: 0;
+      cursor: grab;
+      touch-action: none;
+      background: radial-gradient(ellipse at center, #ffffff 0%, #f4f4f6 70%, #e9e9ee 100%);
+      perspective: 800px;
+      perspective-origin: 50% 50%;
+      overflow: hidden;
+    }
+    .stage.dragging { cursor: grabbing; }
+    .scene3d {
+      position: absolute; inset: 0;
+      transform-style: preserve-3d;
+      will-change: transform;
+    }
+    .cell {
+      position: absolute;
+      top: 0; left: 0;
+      transform-origin: center center;
+      will-change: transform, opacity;
+      pointer-events: none;
+      background: #0a0a0a;
+    }
+    .cell img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+      pointer-events: none;
+      -webkit-user-drag: none;
+    }
+
+    /* Scene-panel poster gallery — mixed portrait + landscape.
+       Each thumb sets its own aspect ratio inline so the grid packs
+       cleanly regardless of orientation. */
+    .akira-gallery {
+      padding: 8px 12px 14px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      align-items: start;
+    }
+    .akira-thumb {
+      position: relative;
+      border-radius: 3px;
+      overflow: hidden;
+      cursor: pointer;
+      background: #0a0a0a;
+      border: 1px solid hsl(0 0% 100% / 0.06);
+      transition: transform 120ms ease, border-color 120ms ease;
+    }
+    .akira-thumb.portrait  { aspect-ratio: 545 / 800; }
+    .akira-thumb.landscape { aspect-ratio: 800 / 546; grid-column: span 2; }
+    .akira-thumb:hover {
+      transform: translateY(-1px);
+      border-color: #DA1F26;
+    }
+    .akira-thumb img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    /* Self-doubled selectors (`.x.x`) outscore the panel's
+       `.ghost-panel * { font-family: inherit }` reset (0,1,1) so
+       IBM Plex Mono wins. */
+    .akira-thumb-label.akira-thumb-label {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      padding: 2px 4px;
+      font-size: 8px;
+      font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      color: #f5e6ce;
+      background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+      text-align: center;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .akira-gallery-header.akira-gallery-header {
+      padding: 10px 12px 6px;
+      font-size: 10px;
+      font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: hsl(0 0% 100% / 0.55);
+    }
+
+    .hint {
+      position: fixed; right: 16px; bottom: 16px;
+      max-width: 280px;
+      background: hsl(0 0% 8% / 0.92);
+      backdrop-filter: blur(16px) saturate(160%);
+      border: 1px solid hsl(0 0% 100% / 0.1);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 12px; line-height: 1.5;
+      color: hsl(0 0% 100% / 0.85);
+      pointer-events: none;
+      z-index: 100;
+    }
+    .hint b { color: #fff; }
+    .hint kbd {
+      display: inline-block; padding: 1px 5px; margin: 0 1px;
+      background: hsl(0 0% 100% / 0.1);
+      border-radius: 3px; font-size: 10px; font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage"><div class="scene3d" id="scene"></div></div>
+  <div class="hint">
+    <b>NEO-TOKYO</b><br>
+    <b>Drag</b> to move · <b>scroll</b> to fly forward/back<br>
+    <kbd>W A S D</kbd> move · <kbd>Q E</kbd> up/down<br>
+    <kbd>Shift+D</kbd> toggles panels
+  </div>
+
+  <script type="module">
+    window.__demoStep = 0;
+    window.addEventListener('error', e => { window.__demoError = e.error?.message || e.message; });
+    window.addEventListener('unhandledrejection', e => { window.__demoError = e.reason?.message || String(e.reason); });
+    const STEP = (n, label) => { window.__demoStep = n; window.__demoLabel = label; };
+    STEP(10, 'imports');
+
+    import { createGhostPanel } from './index.js';
+    STEP(20, 'imported Ghost Panel');
+
+    // ── Constants ported 1:1 from the reference React Three Fiber
+    // source. Units are roughly equivalent to "px in the world" — the
+    // CSS perspective converts world coords to screen pixels via
+    // pinhole projection, so the numbers translate cleanly.
+    const CHUNK_SIZE        = 110;
+    const ITEMS_PER_CHUNK   = 5;
+    const RENDER_DISTANCE   = 2;     // chunks in each direction → 5×5×5 cube
+    const CHUNK_FADE_MARGIN = 0;     // outermost ring uses the depth fade
+                                     // for soft edge — no extra cells needed
+    const MAX_VELOCITY      = 3.2;
+    const DEPTH_FADE_START  = 140;
+    const DEPTH_FADE_END    = 260;
+    const KEYBOARD_SPEED    = 0.18;
+    const VELOCITY_LERP     = 0.16;
+    const VELOCITY_DECAY    = 0.9;
+    const INITIAL_CAMERA_Z  = 50;
+    const PERSPECTIVE       = 800;   // matches CSS `perspective` above
+
+    // ── State ────────────────────────────────────────────────────────
+    const STATE = {
+      // World camera position
+      camX: 0, camY: 0, camZ: INITIAL_CAMERA_Z,
+      // Live + target velocity (lerped each frame)
+      velX: 0, velY: 0, velZ: 0,
+      targetVelX: 0, targetVelY: 0, targetVelZ: 0,
+      // Drift toward cursor (non-touch parallax effect from reference)
+      driftX: 0, driftY: 0,
+      mouseX: 0, mouseY: 0,
+      // Wheel accumulator — wheel ticks are folded into z target each
+      // frame, decayed at 0.8 per frame so flicks taper smoothly.
+      scrollAccum: 0,
+      // Drag state
+      isDragging: false,
+      lastMouseX: 0, lastMouseY: 0,
+      // Photo source
+      photoBase: 'remote',
+      photoSize: 200,    // matches typical on-screen render (80–250px)
+      greyscale: false,
+      blur: 0,
+      photoSalt: 0,
+      // Inspector-exposed tunables (mirrors of constants so the user
+      // can tweak them live without editing the source)
+      maxVelocity:     MAX_VELOCITY,
+      velocityLerp:    VELOCITY_LERP,
+      velocityDecay:   VELOCITY_DECAY,
+      depthFadeStart:  DEPTH_FADE_START,
+      depthFadeEnd:    DEPTH_FADE_END,
+      keyboardSpeed:   KEYBOARD_SPEED,
+      perspective:     PERSPECTIVE,
+      driftAmount:     8.0,
+      // World scale — multiplies generated cell sizes. Higher = bigger
+      // photos.
+      worldScale:      18,
+      // Active programmatic tween for Tour/Snap (curve-eased)
+      tween: null,
+      // Easing
+      curve: [0.42, 0, 0.58, 1],
+      tweenDuration: 0.9,
+    };
+
+    // ── Cubic-bezier evaluator (CSS-compatible) ──────────────────────
+    function cubicBezier(x1, y1, x2, y2) {
+      const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+      const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+      const sx = (t) => ((ax * t + bx) * t + cx) * t;
+      const sy = (t) => ((ay * t + by) * t + cy) * t;
+      const dx = (t) => (3 * ax * t + 2 * bx) * t + cx;
+      return (inputX) => {
+        if (inputX <= 0) return 0;
+        if (inputX >= 1) return 1;
+        let t = inputX;
+        for (let i = 0; i < 8; i++) {
+          const x = sx(t) - inputX;
+          if (Math.abs(x) < 1e-5) return sy(t);
+          const d = dx(t);
+          if (Math.abs(d) < 1e-6) break;
+          t = t - x / d;
+        }
+        let lo = 0, hi = 1; t = inputX;
+        for (let i = 0; i < 12; i++) {
+          const x = sx(t);
+          if (Math.abs(x - inputX) < 1e-5) return sy(t);
+          if (x < inputX) lo = t; else hi = t;
+          t = (lo + hi) / 2;
+        }
+        return sy(t);
+      };
+    }
+    let easeFn = cubicBezier(...STATE.curve);
+
+    const EASE_PRESETS = {
+      'Linear':       [0,    0,    1,    1],
+      'Ease in':      [0.42, 0,    1,    1],
+      'Ease out':     [0,    0,    0.58, 1],
+      'Ease in/out':  [0.42, 0,    0.58, 1],
+      'Snappy':       [0.86, 0,    0.07, 1],
+      'Spring':       [0.34, 1.56, 0.64, 1],
+      'Custom':       null,
+    };
+
+    function tweenTo({ x, y, z, duration }) {
+      STATE.tween = {
+        startTime: performance.now(),
+        duration: (duration ?? STATE.tweenDuration) * 1000,
+        fromX: STATE.camX, toX: (x ?? STATE.camX),
+        fromY: STATE.camY, toY: (y ?? STATE.camY),
+        fromZ: STATE.camZ, toZ: (z ?? STATE.camZ),
+      };
+    }
+
+    // ── Chunk plane generation (mirrors generateChunkPlanes) ─────────
+    // Each chunk is a CHUNK_SIZE cube of world space containing 5
+    // randomly-placed planes. Generated lazily, cached by chunk key.
+    function hashStr(s) {
+      let h = 2166136261;
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    }
+    function seededRand(seed) {
+      // Same mulberry32-style PRNG as the reference
+      let t = (seed + 0x6D2B79F5) | 0;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return (((t ^ (t >>> 14)) >>> 0) / 4294967296);
+    }
+    const planeCache = new Map();
+    function chunkPlanes(cx, cy, cz) {
+      const key = `${cx},${cy},${cz}`;
+      const hit = planeCache.get(key);
+      if (hit) return hit;
+      const seed = hashStr(key);
+      const planes = [];
+      for (let i = 0; i < ITEMS_PER_CHUNK; i++) {
+        const s = seed + i * 1000;
+        const r = (n) => seededRand(s + n);
+        const size = (12 + r(4) * 8) * (STATE.worldScale / 18);  // 12–20, scaled
+        planes.push({
+          id: `${key}-${i}`,
+          x: cx * CHUNK_SIZE + r(0) * CHUNK_SIZE,
+          y: cy * CHUNK_SIZE + r(1) * CHUNK_SIZE,
+          z: cz * CHUNK_SIZE + r(2) * CHUNK_SIZE,
+          size,
+          mediaIndex: Math.floor(r(5) * 1_000_000),
+        });
+      }
+      planeCache.set(key, planes);
+      return planes;
+    }
+
+    // ── Akira poster library ───────────────────────────────────────
+    // Real Akira posters from Movie Night 4.23. Originals were 1125×1650
+    // PNGs totalling ~26MB; re-encoded to WebP at 800px max via
+    // Pillow (quality 72) → ~494KB total. Thumbnails at 200px →
+    // ~46KB total for the Scene-panel gallery.
+    //
+    // To keep this purely an HTML asset reference, the imageUrl()
+    // function points at /assets/akira/akira-NN.webp and the gallery
+    // uses /assets/akira/akira-NN-thumb.webp.
+    // Posters 01–07 are portrait (the original AKIRA poster layout).
+    // Posters 08–12 are landscape compositions that were stored
+    // sideways in the source PNGs; the encoder rotates them upright,
+    // so we mark them 'landscape' here and the cell sizing follows.
+    const POSTER_NUMS = ['01', '03', '05', '06', '07', '08', '09', '10', '11', '12'];
+    const LANDSCAPE_SET = new Set(['08', '09', '10', '11', '12']);
+    const AKIRA_MOTIFS = POSTER_NUMS.map(n => ({
+      name: `Poster ${n}`,
+      full: `./assets/akira/akira-${n}.webp`,
+      thumb: `./assets/akira/akira-${n}-thumb.webp`,
+      orientation: LANDSCAPE_SET.has(n) ? 'landscape' : 'portrait',
+    }));
+
+    // Aspect ratio of the source posters (1125 × 1650 → 5:7.33).
+    // Portrait cells use plane.size as WIDTH and multiply for height;
+    // landscape cells swap the two.
+    const POSTER_AR = 800 / 545;        // long-side / short-side ≈ 1.468
+
+    function motifFor(mediaIndex) {
+      return AKIRA_MOTIFS[(mediaIndex >>> 0) % AKIRA_MOTIFS.length];
+    }
+
+    // ── Photo URL — real Akira poster file ───────────────────────────
+    // 10 posters share across all 625 cells. The browser caches each
+    // file once at the network level, so even though many planes pull
+    // the same poster, it only downloads once.
+    function imageUrl(mediaIndex /*, w, h */) {
+      return motifFor(mediaIndex).full;
+    }
+
+    // ── DOM pool ─────────────────────────────────────────────────────
+    const scene = document.getElementById('scene');
+    const stage = document.getElementById('stage');
+    const live = new Map();   // plane.id → cell el
+    const recycled = [];
+
+    function makeCell() {
+      const el = document.createElement('div');
+      el.className = 'cell';
+      const img = document.createElement('img');
+      img.draggable = false;
+      img.loading = 'lazy';
+      // Decorative: these posters are a visual backdrop for the 3D-grid demo,
+      // not content a screen-reader user needs described. An explicit empty
+      // alt marks them decorative (and silences the a11y advisory) rather than
+      // leaving the attribute off, which reads as "unlabelled meaningful image".
+      img.alt = '';
+      el.appendChild(img);
+      scene.appendChild(el);
+      return el;
+    }
+    function release(el) {
+      el.style.display = 'none';
+      recycled.push(el);
+    }
+    function acquire(plane) {
+      let el = live.get(plane.id);
+      if (el) return el;
+      el = recycled.pop() || makeCell();
+      el.style.display = '';
+      el.style.visibility = '';
+      // Cell size depends on poster orientation. plane.size is the
+      // SHORT side; we multiply by POSTER_AR for the long side. For
+      // portrait posters that's height; for landscape it's width. With
+      // PERSPECTIVE=800 at camera distance 50, a short-15 plane renders
+      // at ~240px on its short side and ~352px on its long side.
+      const motif = motifFor(plane.mediaIndex);
+      const isLandscape = motif.orientation === 'landscape';
+      const pw = isLandscape ? plane.size * POSTER_AR : plane.size;
+      const ph = isLandscape ? plane.size              : plane.size * POSTER_AR;
+      el.style.width  = `${pw}px`;
+      el.style.height = `${ph}px`;
+      // NB: img.src is set lazily on first paint where opacity>0, so
+      // cells that spawn in the far/faded region don't hit the network
+      // until they actually become visible.
+      el._plane = plane;
+      el._pw = pw; el._ph = ph;
+      el._lastT = '';
+      el._lastOp = '';
+      el._srcLoaded = false;
+      live.set(plane.id, el);
+      return el;
+    }
+
+    STEP(40, 'pool ready');
+
+    // ── Frame loop — ported from the SceneController useFrame ────────
+    const keys = { forward: false, backward: false, left: false, right: false, up: false, down: false };
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    // Skip threshold — anything below this counts as "not moving".
+    // Tight enough that the eye can't detect missed frames, loose enough
+    // that residual lerp noise doesn't keep paint running forever.
+    const STATIC_EPSILON = 0.005;
+    let lastCamX = NaN, lastCamY = NaN, lastCamZ = NaN;
+    let lastDriftX = NaN, lastDriftY = NaN;
+
+    // Diagnostic counters — also exposed on window for benchmarking.
+    let _paintCount = 0, _paintSkipped = 0, _domWrites = 0;
+    window.__perf = { get paintCount() { return _paintCount; }, get paintSkipped() { return _paintSkipped; }, get domWrites() { return _domWrites; }, reset() { _paintCount = 0; _paintSkipped = 0; _domWrites = 0; } };
+
+    function paint() {
+      // ── 0. Static-frame skip ───────────────────────────────────────
+      // If nothing's moving and the camera hasn't changed since last
+      // paint, return early. The whole hot loop costs ~0 in that case.
+      // The first frame always runs (NaN !== anything).
+      const anyKey = keys.forward || keys.backward || keys.left ||
+                     keys.right || keys.up || keys.down;
+      const moving = STATE.tween ||
+        STATE.isDragging || anyKey ||
+        Math.abs(STATE.velX) > STATIC_EPSILON ||
+        Math.abs(STATE.velY) > STATIC_EPSILON ||
+        Math.abs(STATE.velZ) > STATIC_EPSILON ||
+        Math.abs(STATE.targetVelX) > STATIC_EPSILON ||
+        Math.abs(STATE.targetVelY) > STATIC_EPSILON ||
+        Math.abs(STATE.targetVelZ) > STATIC_EPSILON ||
+        Math.abs(STATE.scrollAccum) > STATIC_EPSILON ||
+        // Drift settling toward mouse position counts as motion.
+        Math.abs(STATE.driftX - STATE.mouseX * STATE.driftAmount) > STATIC_EPSILON ||
+        Math.abs(STATE.driftY - STATE.mouseY * STATE.driftAmount) > STATIC_EPSILON ||
+        // Force one extra frame after externally-edited state.
+        STATE.camX !== lastCamX || STATE.camY !== lastCamY || STATE.camZ !== lastCamZ ||
+        STATE.driftX !== lastDriftX || STATE.driftY !== lastDriftY;
+      if (!moving) { _paintSkipped++; tick(); return; }
+      _paintCount++;
+
+      // ── 1. Tween wins if a curve-eased move is active ──
+      if (STATE.tween) {
+        const tw = STATE.tween;
+        const t = Math.min(1, (performance.now() - tw.startTime) / tw.duration);
+        const e = easeFn(t);
+        STATE.camX = tw.fromX + (tw.toX - tw.fromX) * e;
+        STATE.camY = tw.fromY + (tw.toY - tw.fromY) * e;
+        STATE.camZ = tw.fromZ + (tw.toZ - tw.fromZ) * e;
+        STATE.velX = 0; STATE.velY = 0; STATE.velZ = 0;
+        STATE.targetVelX = 0; STATE.targetVelY = 0; STATE.targetVelZ = 0;
+        if (t >= 1) STATE.tween = null;
+      } else {
+        // ── 2. Keyboard → target velocity ──
+        if (keys.forward)  STATE.targetVelZ -= STATE.keyboardSpeed;
+        if (keys.backward) STATE.targetVelZ += STATE.keyboardSpeed;
+        if (keys.left)     STATE.targetVelX -= STATE.keyboardSpeed;
+        if (keys.right)    STATE.targetVelX += STATE.keyboardSpeed;
+        if (keys.down)     STATE.targetVelY -= STATE.keyboardSpeed;
+        if (keys.up)       STATE.targetVelY += STATE.keyboardSpeed;
+
+        // ── 3. Cursor drift (subtle parallax on non-touch) ──
+        const isZooming = Math.abs(STATE.velZ) > 0.05;
+        const zoomFactor = clamp(STATE.camZ / INITIAL_CAMERA_Z, 0.3, 2.0);
+        const driftAmount = STATE.driftAmount * zoomFactor;
+        const driftLerp = isZooming ? 0.2 : 0.12;
+        if (!STATE.isDragging) {
+          STATE.driftX = lerp(STATE.driftX, STATE.mouseX * driftAmount, driftLerp);
+          STATE.driftY = lerp(STATE.driftY, STATE.mouseY * driftAmount, driftLerp);
+        }
+
+        // ── 4. Fold wheel scroll into z target ──
+        STATE.targetVelZ += STATE.scrollAccum;
+        STATE.scrollAccum *= 0.8;
+
+        // ── 5. Clamp + lerp velocity to target ──
+        STATE.targetVelX = clamp(STATE.targetVelX, -STATE.maxVelocity, STATE.maxVelocity);
+        STATE.targetVelY = clamp(STATE.targetVelY, -STATE.maxVelocity, STATE.maxVelocity);
+        STATE.targetVelZ = clamp(STATE.targetVelZ, -STATE.maxVelocity, STATE.maxVelocity);
+        STATE.velX = lerp(STATE.velX, STATE.targetVelX, STATE.velocityLerp);
+        STATE.velY = lerp(STATE.velY, STATE.targetVelY, STATE.velocityLerp);
+        STATE.velZ = lerp(STATE.velZ, STATE.targetVelZ, STATE.velocityLerp);
+
+        // ── 6. Integrate position ──
+        STATE.camX += STATE.velX;
+        STATE.camY += STATE.velY;
+        STATE.camZ += STATE.velZ;
+
+        // ── 7. Decay target velocity (so flings taper) ──
+        STATE.targetVelX *= STATE.velocityDecay;
+        STATE.targetVelY *= STATE.velocityDecay;
+        STATE.targetVelZ *= STATE.velocityDecay;
+      }
+
+      // Stamp the post-integration camera so the static-skip check
+      // detects subsequent external mutations.
+      lastCamX = STATE.camX; lastCamY = STATE.camY; lastCamZ = STATE.camZ;
+      lastDriftX = STATE.driftX; lastDriftY = STATE.driftY;
+
+      // ── 8. Render the cells in the current chunk neighborhood ──
+      const cx = Math.floor(STATE.camX / CHUNK_SIZE);
+      const cy = Math.floor(STATE.camY / CHUNK_SIZE);
+      const cz = Math.floor(STATE.camZ / CHUNK_SIZE);
+      const maxD = RENDER_DISTANCE + CHUNK_FADE_MARGIN;
+      const camFullX = STATE.camX + STATE.driftX;
+      const camFullY = STATE.camY + STATE.driftY;
+      const camFullZ = STATE.camZ;
+      // Chrome reports innerWidth=0 for hidden tabs. Fall back to a
+      // sensible default so the cull math still works in headless /
+      // background previews.
+      const w = innerWidth || 1280;
+      const h = innerHeight || 720;
+      const halfW = w / 2, halfH = h / 2;
+      const P = STATE.perspective;
+      const fadeStart = STATE.depthFadeStart;
+      const fadeEnd = STATE.depthFadeEnd;
+      const fadeSpan = Math.max(fadeEnd - fadeStart, 0.0001);
+      // Cull margin in screen pixels — cells whose projected centre is
+      // outside the viewport by more than half their largest possible
+      // size are guaranteed off-screen.
+      const xCullMin = -w * 0.6, xCullMax = w * 1.6;
+      const yCullMin = -h * 0.6, yCullMax = h * 1.6;
+
+      const visible = new Set();
+      for (let dx = -maxD; dx <= maxD; dx++) {
+        for (let dy = -maxD; dy <= maxD; dy++) {
+          for (let dz = -maxD; dz <= maxD; dz++) {
+            const chunkDist = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz));
+            if (chunkDist > maxD) continue;
+            const planes = chunkPlanes(cx + dx, cy + dy, cz + dz);
+            for (let i = 0; i < planes.length; i++) {
+              const p = planes[i];
+              visible.add(p.id);
+              const el = acquire(p);
+              const localX = p.x - camFullX;
+              const localY = p.y - camFullY;
+              const localZ = p.z - camFullZ;
+              // Cull anything at or behind the camera.
+              if (localZ >= 0) {
+                if (el._lastOp !== '0') { el.style.visibility = 'hidden'; el._lastOp = '0'; }
+                continue;
+              }
+              // Depth fade in world units. Compute opacity FIRST so we
+              // can skip the transform write for fully-faded cells.
+              const absDepth = -localZ;
+              let fade;
+              if (absDepth <= fadeStart) fade = 1;
+              else if (absDepth >= fadeEnd) fade = 0;
+              else { const t = 1 - (absDepth - fadeStart) / fadeSpan; fade = t * t; }
+              const opacity = fade;
+              if (opacity < 0.01) {
+                if (el._lastOp !== '0') { el.style.visibility = 'hidden'; el._lastOp = '0'; }
+                continue;
+              }
+              // Project to screen via the CSS perspective formula so we
+              // can cull cells whose projected centre is way outside
+              // the viewport — they'd be invisible after compositing
+              // anyway. Saves a transform write per off-screen cell.
+              const scale = P / -localZ;
+              const projX = halfW + localX * scale;
+              const projY = halfH - localY * scale;
+              if (projX < xCullMin || projX > xCullMax ||
+                  projY < yCullMin || projY > yCullMax) {
+                if (el._lastOp !== '0') { el.style.visibility = 'hidden'; el._lastOp = '0'; }
+                continue;
+              }
+              // Visible → make sure src is loaded (lazy on first show).
+              if (!el._srcLoaded) {
+                el.querySelector('img').src = imageUrl(p.mediaIndex, STATE.photoSize, STATE.photoSize);
+                el._srcLoaded = true;
+              }
+              // CSS perspective math:
+              //   tx = world X offset (1:1 with pixels)
+              //   ty = flipped Y (CSS Y is down)
+              //   tz = P + localZ  → CSS scales by P/(P-tz)=P/-localZ.
+              // Subtract half width/height to centre the cell on its
+              // world point — portrait posters are taller than wide.
+              const sx = halfW + localX - el._pw / 2;
+              const sy = halfH - localY - el._ph / 2;
+              const sz = P + localZ;
+              // Plain string concat is faster than toFixed and the
+              // browser parses identically.
+              const t = 'translate3d(' + sx + 'px,' + sy + 'px,' + sz + 'px)';
+              if (t !== el._lastT) { el.style.transform = t; el._lastT = t; _domWrites++; }
+              const opStr = opacity > 0.999 ? '1' : opacity.toFixed(2);
+              if (opStr !== el._lastOp) {
+                el.style.opacity = opStr;
+                if (el._lastOp === '0') el.style.visibility = '';
+                el._lastOp = opStr;
+                _domWrites++;
+              }
+            }
+          }
+        }
+      }
+
+      // Recycle planes that left the neighborhood.
+      for (const [key, el] of live) {
+        if (!visible.has(key)) {
+          live.delete(key);
+          release(el);
+        }
+      }
+
+      tick();
+    }
+    // Visible tabs run at 60fps from rAF. Hidden tabs (headless previews,
+    // background tabs) have rAF throttled-to-suspended by Chrome, so we
+    // fall back to setTimeout so the simulation keeps progressing for
+    // automated tests. The hot path (visible) is still pure rAF.
+    function tick() {
+      if (document.hidden) setTimeout(paint, 33);
+      else requestAnimationFrame(paint);
+    }
+    tick();
+    document.addEventListener('visibilitychange', tick);
+    STEP(60, 'paint loop running');
+
+    // ── Input ────────────────────────────────────────────────────────
+    stage.addEventListener('pointerdown', (e) => {
+      STATE.isDragging = true;
+      STATE.lastMouseX = e.clientX; STATE.lastMouseY = e.clientY;
+      stage.classList.add('dragging');
+      stage.setPointerCapture(e.pointerId);
+      STATE.tween = null;
+    });
+    window.addEventListener('pointermove', (e) => {
+      STATE.mouseX = (e.clientX / innerWidth)  * 2 - 1;
+      STATE.mouseY = -(e.clientY / innerHeight) * 2 + 1;
+      if (STATE.isDragging) {
+        STATE.targetVelX -= (e.clientX - STATE.lastMouseX) * 0.025;
+        STATE.targetVelY += (e.clientY - STATE.lastMouseY) * 0.025;
+        STATE.lastMouseX = e.clientX; STATE.lastMouseY = e.clientY;
+      }
+    });
+    window.addEventListener('pointerup', () => {
+      STATE.isDragging = false;
+      stage.classList.remove('dragging');
+    });
+    stage.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      STATE.scrollAccum += e.deltaY * 0.006;
+      STATE.tween = null;
+    }, { passive: false });
+    // Keyboard (WASD + QE)
+    const KEY_MAP = {
+      w: 'forward', W: 'forward', ArrowUp: 'forward',
+      s: 'backward', S: 'backward', ArrowDown: 'backward',
+      a: 'left', A: 'left', ArrowLeft: 'left',
+      d: 'right', ArrowRight: 'right',
+      q: 'down', Q: 'down',
+      e: 'up', E: 'up',
+    };
+    // 'd'/'D' alone collides with Shift+D toggle — only set when not
+    // pressed with shift.
+    window.addEventListener('keydown', (e) => {
+      if (e.shiftKey) return;
+      const k = KEY_MAP[e.key];
+      if (k) { keys[k] = true; e.preventDefault(); }
+    });
+    window.addEventListener('keyup', (e) => {
+      const k = KEY_MAP[e.key];
+      if (k) keys[k] = false;
+    });
+    STEP(80, 'input wired');
+
+    // Diagnostic hook — exposes module-scope state for preview_eval tests.
+    // Harmless in production; would be removed for ship.
+    window.__STATE = STATE;
+    window.__keys = keys;
+
+    // ── Stage perspective sync (in case the user changes it via slider) ──
+    function syncPerspective() {
+      stage.style.perspective = `${STATE.perspective}px`;
+    }
+    syncPerspective();
+
+    // ── Ghost Panel panel ────────────────────────────────────────────────
+    // workflowOpts.backgroundTargets tells the 'web' workflow's Background
+    // picker which extra elements to paint alongside <body>. Our .stage
+    // covers body with a radial gradient, so without this the picker
+    // would silently appear broken to the user. Auto-undo is handled by
+    // the Folder API — every value control records its own undo entry,
+    // no host wiring needed.
+    const ui = createGhostPanel({
+      title: 'Inspector',
+      scenePanelTitle: 'Scene · Neo-Tokyo',
+      visible: true,
+      workflow: ['web', 'animation'],
+      workflowOpts: {
+        background: '#ffffff',
+        backgroundTargets: ['.stage'],
+      },
+    });
+
+    // ── Scene-panel photo gallery ───────────────────────────────────
+    // Show every Akira motif that lives in the grid so the Scene panel
+    // is a real index of "what's out there". Click → fly to the nearest
+    // visible photo of that motif via the existing tween system.
+    if (ui.scenePanel?.body) {
+      const header = document.createElement('div');
+      header.className = 'akira-gallery-header';
+      header.textContent = `Posters · ${AKIRA_MOTIFS.length} in scene`;
+      ui.scenePanel.body.appendChild(header);
+
+      const gallery = document.createElement('div');
+      gallery.className = 'akira-gallery';
+      AKIRA_MOTIFS.forEach((motif, idx) => {
+        const tile = document.createElement('div');
+        tile.className = `akira-thumb ${motif.orientation}`;
+        tile.title = `Fly to nearest ${motif.name}`;
+        tile.dataset.motifIndex = String(idx);
+        const img = document.createElement('img');
+        img.src = motif.thumb;
+        img.alt = motif.name;
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        const label = document.createElement('div');
+        label.className = 'akira-thumb-label';
+        label.textContent = motif.name;
+        tile.appendChild(img);
+        tile.appendChild(label);
+        // Clicking flies to the nearest plane that uses this motif. We
+        // scan the chunk neighborhood for matches, pick the one closest
+        // to the camera, and tween to a viewing position 60 units behind
+        // it so the photo lands centred on screen.
+        tile.addEventListener('click', () => {
+          const cx = Math.floor(STATE.camX / CHUNK_SIZE);
+          const cy = Math.floor(STATE.camY / CHUNK_SIZE);
+          const cz = Math.floor(STATE.camZ / CHUNK_SIZE);
+          let best = null, bestDist = Infinity;
+          // Search a wider neighborhood than the render loop so we
+          // always find one — even outside the current view.
+          const R = 4;
+          for (let dx = -R; dx <= R; dx++) {
+            for (let dy = -R; dy <= R; dy++) {
+              for (let dz = -R; dz <= R; dz++) {
+                const planes = chunkPlanes(cx + dx, cy + dy, cz + dz);
+                for (const p of planes) {
+                  if ((p.mediaIndex >>> 0) % AKIRA_MOTIFS.length !== idx) continue;
+                  const ddx = p.x - STATE.camX, ddy = p.y - STATE.camY, ddz = p.z - STATE.camZ;
+                  const d2 = ddx*ddx + ddy*ddy + ddz*ddz;
+                  if (d2 < bestDist) { bestDist = d2; best = p; }
+                }
+              }
+            }
+          }
+          if (best) {
+            withCameraUndo(`Fly to ${motif.name}`, () => {
+              tweenTo({ x: best.x, y: best.y, z: best.z + 60 });
+            });
+          }
+        });
+        gallery.appendChild(tile);
+      });
+      ui.scenePanel.body.appendChild(gallery);
+    }
+
+    // ── Camera-state undo helpers ──────────────────────────────────
+    // Triggers, sequences, and gallery clicks all mutate camera state
+    // but Folder's auto-undo wrapper only fires for value controls
+    // (sliders/colors/etc.), not for action buttons. We snapshot the
+    // full camera + velocity state before each action and push an undo
+    // entry that snap-restores. Undo is teleport (no tween) so it's
+    // instantaneous — matches user expectation for Cmd+Z.
+    function cameraSnapshot() {
+      return {
+        camX: STATE.camX, camY: STATE.camY, camZ: STATE.camZ,
+        velX: STATE.velX, velY: STATE.velY, velZ: STATE.velZ,
+        targetVelX: STATE.targetVelX, targetVelY: STATE.targetVelY, targetVelZ: STATE.targetVelZ,
+        driftX: STATE.driftX, driftY: STATE.driftY,
+        scrollAccum: STATE.scrollAccum,
+        tween: STATE.tween,
+      };
+    }
+    function restoreCamera(s) {
+      STATE.camX = s.camX; STATE.camY = s.camY; STATE.camZ = s.camZ;
+      STATE.velX = s.velX; STATE.velY = s.velY; STATE.velZ = s.velZ;
+      STATE.targetVelX = s.targetVelX; STATE.targetVelY = s.targetVelY; STATE.targetVelZ = s.targetVelZ;
+      STATE.driftX = s.driftX; STATE.driftY = s.driftY;
+      STATE.scrollAccum = s.scrollAccum;
+      STATE.tween = null;     // cancel any in-flight tween so the
+                              // restored position sticks immediately.
+    }
+    /** Run `action` and push an undo entry that restores the camera
+     *  state captured BEFORE the action. Redo replays the action. */
+    function withCameraUndo(label, action) {
+      const before = cameraSnapshot();
+      action();
+      // Resolve "after" by sampling the tween target if one was set,
+      // otherwise the post-action state.
+      const after = STATE.tween
+        ? { ...cameraSnapshot(),
+            camX: STATE.tween.toX, camY: STATE.tween.toY, camZ: STATE.tween.toZ,
+            velX: 0, velY: 0, velZ: 0,
+            targetVelX: 0, targetVelY: 0, targetVelZ: 0, tween: null }
+        : cameraSnapshot();
+      ui._undo?.push({
+        label,
+        undo: () => restoreCamera(before),
+        redo: () => restoreCamera(after),
+      });
+    }
+
+    // Plain onChange handlers below — the Folder API auto-wraps each
+    // one with snapshot-based undo recording (see folder.js
+    // `_wrapOnChange`), so Cmd+Z works out of the box.
+    const motion = ui.addFolder('Motion');
+    motion.addSlider('Max velocity',     { id: 'mv',  value: STATE.maxVelocity,    min: 0.5, max: 8,    step: 0.1,
+      onChange: v => STATE.maxVelocity = v });
+    motion.addSlider('Velocity lerp',    { id: 'vl',  value: STATE.velocityLerp,   min: 0.02, max: 0.5, step: 0.01,
+      tooltip: 'How fast velocity chases its target',
+      onChange: v => STATE.velocityLerp = v });
+    motion.addSlider('Velocity decay',   { id: 'vd',  value: STATE.velocityDecay,  min: 0.7, max: 0.99, step: 0.01,
+      tooltip: 'Per-frame multiplier on target velocity — higher = longer fling',
+      onChange: v => STATE.velocityDecay = v });
+    motion.addSlider('Keyboard speed',   { id: 'ks',  value: STATE.keyboardSpeed,  min: 0.05, max: 0.5, step: 0.01,
+      onChange: v => STATE.keyboardSpeed = v });
+    motion.addSlider('Drift amount',     { id: 'da',  value: STATE.driftAmount,    min: 0,  max: 20,    step: 0.5,
+      tooltip: 'Parallax drift toward the cursor (non-touch only)',
+      onChange: v => STATE.driftAmount = v });
+
+    const depth = ui.addFolder('Depth');
+    depth.addSlider('Perspective',       { id: 'ps',  value: STATE.perspective,    min: 400, max: 1600, step: 50,
+      tooltip: 'CSS focal length — lower = wider field of view',
+      onChange: v => { STATE.perspective = v; syncPerspective(); } });
+    depth.addSlider('Fade start',        { id: 'fs',  value: STATE.depthFadeStart, min: 20,  max: 400,  step: 10,
+      tooltip: 'Cells fully opaque within this Z distance from camera',
+      onChange: v => STATE.depthFadeStart = v });
+    depth.addSlider('Fade end',          { id: 'fe',  value: STATE.depthFadeEnd,   min: 100, max: 600,  step: 10,
+      tooltip: 'Cells fully invisible past this Z distance — fog horizon',
+      onChange: v => STATE.depthFadeEnd = v });
+    depth.addSlider('World scale',       { id: 'ws',  value: STATE.worldScale,     min: 8,   max: 40,   step: 1,
+      tooltip: 'Cell size in world units (12–20 × this / 18)',
+      onChange: v => { STATE.worldScale = v; planeCache.clear(); reseed(); } });
+
+    const photos = ui.addFolder('Photos');
+    photos.addButton('Reshuffle motifs', () => {
+      // Buttons don't auto-record undo (they're actions, not values).
+      // We hand-push so each Reshuffle is reversible.
+      const before = STATE.photoSalt;
+      const after = before + 1;
+      const doIt = () => { STATE.photoSalt = after; planeCache.clear(); reseed(); };
+      const undoIt = () => { STATE.photoSalt = before; planeCache.clear(); reseed(); };
+      doIt();
+      ui._undo?.push({ label: 'Reshuffle motifs', undo: undoIt, redo: doIt });
+    });
+
+    function reseed() {
+      for (const [k, el] of live) {
+        el.querySelector('img').src = '';
+        live.delete(k);
+        recycled.push(el);
+        el.style.display = 'none';
+        el._srcLoaded = false;
+        el._lastT = '';
+        el._lastOp = '';
+      }
+    }
+
+    // Easing folder — drives Tour + Snap-to-home curve-eased moves
+    const easing = ui.addFolder('Easing');
+    easing.addCurveEditor('Curve', {
+      id: 'curve', value: STATE.curve, height: 140,
+      onChange: (v) => { STATE.curve = v.slice(); easeFn = cubicBezier(...v); },
+    });
+    easing.addSelect('Preset', {
+      id: 'preset',
+      options: Object.keys(EASE_PRESETS),
+      value: 'Ease in/out',
+      onChange: (name) => {
+        const cps = EASE_PRESETS[name];
+        if (!cps) return;
+        STATE.curve = cps.slice();
+        easeFn = cubicBezier(...cps);
+        easing.get('curve')?.setValue(cps);
+      },
+    });
+    easing.addSlider('Duration', { id: 'dur', value: STATE.tweenDuration, min: 0.1, max: 3.0, step: 0.05,
+      onChange: v => STATE.tweenDuration = v });
+
+    // Animations — a single guided Tour. (Standalone "Snap to origin" /
+    // "Auto-fling" play triggers were removed; the looping Tour is the one
+    // play animation here.) Each step's onEnter is wrapped in withCameraUndo
+    // so Cmd+Z snaps the camera back to wherever it was before the step
+    // fired; Redo replays the step's final state. The Easing folder's curve
+    // editor above stays — it's what makes previewing the Tour's curve useful.
+    const anim = ui.addFolder('Animations');
+    anim.addSequence('Tour', {
+      steps: [
+        { name: 'Origin',    duration: () => STATE.tweenDuration,
+          onEnter: () => withCameraUndo('Tour: Origin',
+            () => tweenTo({ x: 0,    y: 0,    z: INITIAL_CAMERA_Z })) },
+        { name: 'Push in',   duration: () => STATE.tweenDuration,
+          onEnter: () => withCameraUndo('Tour: Push in',
+            () => tweenTo({ x: 0,    y: 0,    z: INITIAL_CAMERA_Z - 200 })) },
+        { name: 'Up & away', duration: () => STATE.tweenDuration,
+          onEnter: () => withCameraUndo('Tour: Up & away',
+            () => tweenTo({ x: 80,   y: 80,   z: INITIAL_CAMERA_Z - 100 })) },
+        { name: 'Far field', duration: () => STATE.tweenDuration,
+          onEnter: () => withCameraUndo('Tour: Far field',
+            () => tweenTo({ x: 200,  y: -50,  z: INITIAL_CAMERA_Z + 150 })) },
+      ],
+      loop: true,
+    });
+
+    ui.bindToggleKey('D', { shift: true });
+    window.ui = ui;
+    window.GRID_STATE = STATE;
+    STEP(100, 'done');
+
+    // Mount the bottom-left demo switcher (3D · 2D · Web · Grid)
+    const { mountDemoSwitcher } = await import('./demo-switcher.js');
+    mountDemoSwitcher();
+  </script>
+</body>
+</html>

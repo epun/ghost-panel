@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./assets/branding/logo-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./assets/branding/logo-192.png">
+  <link rel="apple-touch-icon" href="./assets/branding/logo-192.png">
+  <title>Ghost Panel — 3D scene demo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #ffffff; color: #fff; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    #canvas { display: block; width: 100%; height: 100%; }
+    #help {
+      position: fixed; bottom: 16px; right: 16px; z-index: 10;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 11px; color: rgba(255,255,255,0.7);
+      line-height: 1.6;
+      pointer-events: none;
+      max-width: 280px;
+    }
+    #help b { color: #fff; }
+    #help kbd {
+      background: rgba(255,255,255,0.1);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: ui-monospace, monospace;
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="help">
+    <b>Ghost Panel — 3D scene demo</b><br>
+    <kbd>Shift+D</kbd> toggle panels<br>
+    Click any object to select it<br>
+    <kbd>G</kbd> move · <kbd>R</kbd> rotate · <kbd>S</kbd> scale · <kbd>Esc</kbd> deselect<br>
+    Workflows auto-load from the scene.
+  </div>
+
+  <!-- No importmap: rely on Vite's `three` resolution to node_modules so the
+       demo and the Ghost Panel library share the SAME Three.js instance.
+       Otherwise instanceof checks (Object3D, Material, etc.) fail. -->
+
+  <script type="module">
+    window.__demoStep = 0;
+    window.addEventListener('error', e => { window.__demoError = e.error?.message || e.message; });
+    window.addEventListener('unhandledrejection', e => { window.__demoError = e.reason?.message || String(e.reason); });
+    const STEP = (n, label) => { window.__demoStep = n; window.__demoLabel = label; };
+
+    STEP(1, 'before imports');
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { createGhostPanel } from './index.js';
+    import { mountDemoSwitcher } from './demo-switcher.js';
+    mountDemoSwitcher();
+    STEP(2, 'imports done');
+
+    // ── Three.js setup ─────────────────────────────────────────────────
+    const canvas   = document.getElementById('canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+    scene.fog = new THREE.Fog(0xffffff, 8, 25);
+
+    // Guard the aspect against a 0-sized viewport at construction time.
+    // In a hidden/early-layout tab (headless preview, backgrounded window)
+    // innerWidth/innerHeight can be 0, so a bare innerWidth/innerHeight gives
+    // 0/0 = NaN. That NaN flows into the camera's projection matrix and then
+    // into its CameraHelper geometry, which makes Three.js log a stream of
+    // "computeBoundingSphere(): Computed radius is NaN" errors until the first
+    // resize fixes the aspect. The 2D demo already guards the same way.
+    const camera = new THREE.PerspectiveCamera(45, (innerWidth || 1280) / (innerHeight || 720), 0.1, 100);
+    camera.position.set(5, 4, 6);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 0.5, 0);
+    controls.enableDamping = true;
+
+    // ── Ground plane ──
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 30),
+      new THREE.MeshStandardMaterial({ color: 0xe8e8ec, roughness: 0.9, metalness: 0.0 }),
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    ground.name = 'Ground';
+    scene.add(ground);
+
+    // ── A few standard objects ──
+    const cube = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial({ color: 0xffcc66, roughness: 0.4, metalness: 0.2 }),
+    );
+    cube.position.set(-2, 0.5, 0);
+    cube.castShadow = true;
+    cube.name = 'Cube';
+    scene.add(cube);
+
+    const sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(0.6, 48, 32),
+      new THREE.MeshStandardMaterial({ color: 0xff5566, roughness: 0.2, metalness: 0.7 }),
+    );
+    sphere.position.set(0, 0.6, 0);
+    sphere.castShadow = true;
+    sphere.name = 'Sphere';
+    scene.add(sphere);
+
+    // ── Custom ShaderMaterial → triggers SHADER workflow detection ──
+    const torus = new THREE.Mesh(
+      new THREE.TorusKnotGeometry(0.55, 0.18, 100, 16),
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uTime:  { value: 0 },
+          uColor: { value: new THREE.Color(0x55aaff) },
+        },
+        vertexShader: /* glsl */ `
+          varying vec3 vNormal;
+          varying vec3 vPosition;
+          void main() {
+            vNormal = normalize(normalMatrix * normal);
+            vPosition = position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform float uTime;
+          uniform vec3 uColor;
+          varying vec3 vNormal;
+          varying vec3 vPosition;
+          void main() {
+            float rim = pow(1.0 - abs(dot(vNormal, vec3(0,0,1))), 2.0);
+            float pulse = 0.5 + 0.5 * sin(uTime * 2.0 + vPosition.y * 4.0);
+            vec3 c = mix(uColor * 0.5, uColor, pulse);
+            gl_FragColor = vec4(c + rim * 0.5, 1.0);
+          }
+        `,
+      }),
+    );
+    torus.position.set(2, 0.8, 0);
+    torus.castShadow = true;
+    torus.name = 'TorusKnot (Shader)';
+    scene.add(torus);
+
+    // ── Lights ──
+    const ambient = new THREE.AmbientLight(0xffffff, 0.3);
+    scene.add(ambient);
+
+    const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+    sun.position.set(5, 8, 4);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.name = 'Sun';
+    scene.add(sun);
+
+    const fill = new THREE.PointLight(0xff5588, 1.5, 8);
+    fill.position.set(-3, 2, 2);
+    fill.name = 'Fill';
+    scene.add(fill);
+
+    // ── A second camera the user can "look through" via the mini toolbar's
+    //    camera button. Placed off to the side so the snap is visually
+    //    obvious. registerCamera() (below) adds a CameraHelper for us.
+    const povCam = new THREE.PerspectiveCamera(35, (innerWidth || 1280) / (innerHeight || 720), 0.1, 100);
+    povCam.position.set(-3, 1.2, 1.4);
+    povCam.lookAt(0, 0.5, 0);
+    povCam.name = 'POV Camera';
+
+    // ── AnimationMixer → triggers ANIMATION workflow detection ──
+    // Simple positional bob on the cube via stored animation clip.
+    const cubeTrack = new THREE.VectorKeyframeTrack(
+      '.position', [0, 1, 2], [-2, 0.5, 0,  -2, 1.5, 0,  -2, 0.5, 0],
+    );
+    const cubeClip = new THREE.AnimationClip('CubeBob', 2, [cubeTrack]);
+    const mixer = new THREE.AnimationMixer(cube);
+    const action = mixer.clipAction(cubeClip);
+    action.play();
+    cube.userData.mixer = mixer;
+    cube.userData.animations = [cubeClip];
+
+    // ── Ghost Panel ──────────────────────────────────────────────────────
+    // Pass scene/camera/renderer/controls → auto-detects '3d', and the
+    // scene scan finds the ShaderMaterial → adds 'shader'. The cube's
+    // userData.mixer adds 'animation'. All three workflows light up
+    // automatically without the user picking anything.
+    const ui = createGhostPanel({
+      title: 'Inspector',
+      scenePanel: true,
+      scenePanelTitle: 'Scene',
+      scene, camera, renderer, controls,
+      visible: true,
+      workflowOpts: {
+        duration: 2,
+        tracks: [
+          { name: 'sphere.y', color: '#ff6b6b', keys: [
+            { time: 0, value: 0.5 }, { time: 1, value: 1.7, easing: 'easeInOut' },
+            { time: 2, value: 0.5, easing: 'easeInOut' },
+          ]},
+        ],
+        onUpdate: (t, values) => {
+          // Drive the sphere's Y position from the graph editor — a
+          // bouncing sphere reads more naturally than a bouncing cube
+          // and matches the rest of the scene's "alive" feel.
+          if (values['sphere.y'] !== undefined) sphere.position.y = values['sphere.y'];
+        },
+        // Shader uniforms — populated automatically into the shader workflow
+        uniforms: {
+          'TorusKnot Color': {
+            type: 'color', value: '#55aaff',
+            // `owner` is the rule for selection-gating: the Uniforms folder
+            // is only shown in the panel while this object is selected.
+            owner: torus,
+            onChange: c => torus.material.uniforms.uColor.value.set(c),
+            tooltip: 'Base color uniform of the torus knot shader',
+          },
+        },
+        // Light references for the lighting folder
+        lights: [
+          Object.assign(sun,  { name: 'Sun' }),
+          Object.assign(fill, { name: 'Fill' }),
+        ],
+      },
+    });
+
+    // Register objects with the object manager so they appear in the outliner
+    // and can be selected/manipulated via the canvas gizmo.
+    ui.objectManager.register('Cube',   cube);
+    ui.objectManager.register('Sphere', sphere);
+    ui.objectManager.register('TorusKnot', torus);
+    ui.objectManager.registerLight('Sun',  sun);
+    ui.objectManager.registerLight('Fill', fill);
+    // The POV camera shows up in the outliner — selecting it enables the
+    // camera button on the mini toolbar (click → main viewport snaps to
+    // this camera's transform + projection; click again to bail out).
+    ui.objectManager.registerCamera('POV Camera', povCam);
+    ui.refreshSceneObjects();
+
+    // Note: the bottom transport toolbar and the Move/Rotate/Scale mode
+    // toolbar are now owned by the library — they auto-appear from the
+    // animation workflow (transport) and the contextual inspector (mode
+    // toolbar appears only on selection, pinned to the Inspector's left).
+
+    // ── Animation triggers + sequence ────────────────────────────────
+    // Hero-styled "fire this animation" rows. The library wires the
+    // play button + progress bar; the host just provides the handler.
+    const anim = ui.addFolder('Animations');
+    // Each trigger wraps its mutation in a snapshot/restore undo entry
+    // so Cmd+Z snaps the affected object back to its pre-trigger state.
+    // Triggers fire transient animations; without this wrap, hitting the
+    // button is a "stuck" mutation with no way to back out.
+    anim.addTrigger('Spin TorusKnot', {
+      onTrigger: () => {
+        const fromY = torus.rotation.y;
+        const toY   = fromY + Math.PI * 2;
+        const start = performance.now();
+        const dur = 1200;
+        function tick() {
+          const t = Math.min(1, (performance.now() - start) / dur);
+          torus.rotation.y = fromY + t * Math.PI * 2;
+          if (t < 1) requestAnimationFrame(tick);
+        }
+        tick();
+        ui._undo?.push({
+          label: 'Spin TorusKnot',
+          undo: () => { torus.rotation.y = fromY; },
+          redo: () => { torus.rotation.y = toY; },
+        });
+      },
+      duration: 1.2,
+    });
+    anim.addTrigger('Pulse Sphere', {
+      onTrigger: () => {
+        const fromScale = sphere.scale.x;
+        const start = performance.now();
+        const dur = 800;
+        function tick() {
+          const t = Math.min(1, (performance.now() - start) / dur);
+          const s = 1 + 0.4 * Math.sin(t * Math.PI);
+          sphere.scale.set(s, s, s);
+          if (t < 1) requestAnimationFrame(tick);
+          else sphere.scale.set(fromScale, fromScale, fromScale);   // settle back to start
+        }
+        tick();
+        ui._undo?.push({
+          label: 'Pulse Sphere',
+          // Pulse returns to its starting scale, so undo is a no-op for
+          // position — but we record the entry anyway so the user sees
+          // it in the stack and the "any action" guarantee holds.
+          undo: () => { sphere.scale.set(fromScale, fromScale, fromScale); },
+          redo: () => { sphere.scale.set(fromScale, fromScale, fromScale); },
+        });
+      },
+      duration: 0.8,
+    });
+    // Keyboard shortcut: Shift+D toggles the panels (and toolbars stay visible)
+    ui.bindToggleKey('D', { shift: true });
+
+    // ── Render loop ───────────────────────────────────────────────────
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+      torus.material.uniforms.uTime.value += dt;
+      torus.rotation.y += dt * 0.3;
+      sphere.rotation.y += dt * 0.5;
+      mixer.update(dt);
+      controls.update();
+      ui.update();
+      ui.objectManager.updateHelpers?.();
+      // Always render through the main camera. When the user enters a POV
+      // via the mini-toolbar's camera button, Ghost Panel snaps the main
+      // camera onto that POV's transform + projection, so the same render
+      // call shows the new viewpoint AND OrbitControls keeps responding.
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Resize
+    addEventListener('resize', () => {
+      camera.aspect = (innerWidth || 1280) / (innerHeight || 720);
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    STEP(99, 'about to expose');
+    // Expose for console poking
+    window.scene = scene; window.ui = ui; window.THREE = THREE;
+    STEP(100, 'done');
+    console.log('Active workflows:', ui.activeWorkflows);
+  </script>
+</body>
+</html>

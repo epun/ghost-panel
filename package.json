@@ -1,0 +1,84 @@
+{
+  "name": "ghost-panel",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Drop-in workflow-aware debug UI for Three.js / 2D canvas / web. Outliner, mini transform toolbar, graph editor, undo, copy/paste, exporters.",
+  "keywords": [
+    "three",
+    "threejs",
+    "debug",
+    "panel",
+    "gui",
+    "inspector",
+    "graph-editor",
+    "keyframe",
+    "animation",
+    "WAAPI"
+  ],
+  "license": "MIT",
+  "author": "Evan Pun",
+  "homepage": "https://github.com/epun/ghost-panel#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/epun/ghost-panel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/epun/ghost-panel/issues"
+  },
+  "sideEffects": [
+    "./styles.js",
+    "./tooltip.js"
+  ],
+  "main": "./dist/ghost-panel.cjs",
+  "module": "./index.js",
+  "unpkg":   "./dist/ghost-panel.umd.js",
+  "jsdelivr": "./dist/ghost-panel.umd.js",
+  "exports": {
+    ".": {
+      "import": "./index.js",
+      "require": "./dist/ghost-panel.cjs"
+    },
+    "./bundle": "./dist/ghost-panel.js",
+    "./umd":    "./dist/ghost-panel.umd.js",
+    "./source": "./index.js",
+    "./react":  "./adapters/react.js",
+    "./solid":  "./adapters/solid.js",
+    "./svelte": "./adapters/svelte.js",
+    "./vue":    "./adapters/vue.js",
+    "./animation": "./animation.js",
+    "./skills": "./skills.js",
+    "./styles": "./styles.js",
+    "./dev-mode": "./dev-mode.js",
+    "./demo-switcher": "./demo-switcher.js",
+    "./learning": "./learning.js",
+    "./vite-plugin": "./vite-plugin-ghost-panel.js"
+  },
+  "files": [
+    "dist",
+    "adapters",
+    "assets/branding",
+    "*.js",
+    "!vite.config.js",
+    "!ghost-panel-*.html",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "pack:tgz": "npm run build && npm pack",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "three": ">=0.150.0 <1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "three": "^0.160.0",
+    "vite": "^5.0.0"
+  }
+}

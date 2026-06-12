@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./assets/branding/logo-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./assets/branding/logo-192.png">
+  <link rel="apple-touch-icon" href="./assets/branding/logo-192.png">
+  <title>Ghost Panel — web elements demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      background: #ffffff; color: #fff;
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    }
+
+    /* Subtle gridded backdrop so transforms read clearly */
+    .stage {
+      position: fixed; inset: 0;
+      background-color: #ffffff;
+      background-image:
+        radial-gradient(circle at 50% 50%, hsl(220 40% 96%) 0, transparent 60%),
+        repeating-linear-gradient(0deg, transparent 0 39px, hsl(0 0% 0% / 0.05) 39px 40px),
+        repeating-linear-gradient(90deg, transparent 0 39px, hsl(0 0% 0% / 0.05) 39px 40px);
+    }
+
+    /* Each animated element. `position: fixed; transform-origin: 0 0`
+       matches the web-adapter contract — Ghost Panel writes a CSS transform
+       built from { x, y, rotation, scale } and the element follows. */
+    .el {
+      position: fixed; top: 0; left: 0;
+      transform-origin: 0 0;
+      will-change: transform, opacity;
+      cursor: grab;
+      user-select: none;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600; letter-spacing: -0.02em;
+      border-radius: 18px;
+      transition: box-shadow 0.2s ease;
+    }
+    .el:hover { box-shadow: 0 24px 50px hsl(0 0% 0% / 0.5); }
+    .el.dragging { cursor: grabbing; }
+
+    .card {
+      width: 220px; height: 140px;
+      background: linear-gradient(135deg, hsl(220 80% 55%), hsl(280 80% 55%));
+      box-shadow: 0 18px 40px hsl(220 80% 30% / 0.45);
+      color: #fff;
+      font-size: 16px;
+    }
+    .pill {
+      width: 160px; height: 56px;
+      background: linear-gradient(180deg, hsl(160 70% 55%), hsl(180 70% 45%));
+      border-radius: 28px;
+      box-shadow: 0 14px 30px hsl(160 70% 30% / 0.45);
+      color: #fff;
+      font-size: 14px;
+    }
+    .cta {
+      width: 200px; height: 64px;
+      background: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 92%));
+      color: hsl(0 0% 5%);
+      border-radius: 14px;
+      font-size: 15px;
+      box-shadow: 0 16px 40px hsl(0 0% 0% / 0.35);
+    }
+
+    .hint {
+      position: fixed; right: 16px; bottom: 16px;
+      max-width: 280px;
+      background: hsl(0 0% 8% / 0.92);
+      backdrop-filter: blur(16px) saturate(160%);
+      border: 1px solid hsl(0 0% 100% / 0.1);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 12px; line-height: 1.5;
+      color: hsl(0 0% 100% / 0.85);
+      pointer-events: none;
+    }
+    .hint b { color: #fff; }
+    .hint kbd {
+      display: inline-block; padding: 1px 5px; margin: 0 1px;
+      background: hsl(0 0% 100% / 0.1);
+      border-radius: 3px; font-size: 10px; font-family: ui-monospace, monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage"></div>
+
+  <!-- These elements get wrapped by createWebAdapter so Ghost Panel can
+       drive their transforms, surface their properties in the inspector,
+       and let the user drag them with the canvas-style 2D gizmo. -->
+  <div class="el card"  data-ghost-panel>Card Element</div>
+  <div class="el pill"  data-ghost-panel>Tag pill</div>
+  <div class="el cta"   data-ghost-panel>Get started →</div>
+
+  <div class="hint">
+    <b>Ghost Panel — web elements demo</b><br>
+    Click any element to select · drag the gizmo to move<br>
+    <kbd>Shift+D</kbd> toggles the panels.
+  </div>
+
+  <script type="module">
+    window.__demoStep = 0;
+    window.addEventListener('error', e => { window.__demoError = e.error?.message || e.message; });
+    window.addEventListener('unhandledrejection', e => { window.__demoError = e.reason?.message || String(e.reason); });
+    const STEP = (n, label) => { window.__demoStep = n; window.__demoLabel = label; };
+    STEP(10, 'imports');
+
+    import { createGhostPanel, createWebAdapter } from './index.js';
+    STEP(20, 'imported Ghost Panel');
+
+    // Layout the elements at sensible starting positions so they don't
+    // pile up at (0, 0). The web adapter takes initial x/y, width/height
+    // and applies them via a CSS transform.
+    const W = innerWidth, H = innerHeight;
+    const els = document.querySelectorAll('[data-ghost-panel]');
+    const layout = [
+      { name: 'card', x: W * 0.30, y: H * 0.30 },
+      { name: 'pill', x: W * 0.55, y: H * 0.45 },
+      { name: 'cta',  x: W * 0.40, y: H * 0.65 },
+    ];
+
+    const ui = createGhostPanel({
+      title: 'Inspector',
+      scenePanelTitle: 'Scene',
+      visible: true,
+      // .stage covers <body>, so tell the web workflow's Background picker
+      // to paint it too — otherwise the control would appear to do nothing.
+      workflowOpts: {
+        background: '#ffffff',
+        backgroundTargets: ['.stage'],
+      },
+    });
+
+    // Register each tagged element through the web adapter — that's
+    // what gives them properties (x, y, rotation, opacity, corner
+    // radius, typography) in the inspector when selected.
+    layout.forEach((cfg, i) => {
+      const el = els[i];
+      const adapter = createWebAdapter(el, {
+        name: cfg.name,
+        x: cfg.x, y: cfg.y,
+        rotation: 0,
+      });
+      ui.objectManager.register(cfg.name, adapter);
+    });
+
+    // Page-level controls (Background, Show Hit Targets) come from the
+    // web workflow auto-loaded above.
+
+    ui.bindToggleKey('D', { shift: true });
+    window.ui = ui;
+    STEP(100, 'done');
+
+    // Mount the bottom-left demo switcher (3D · 2D · Web · Grid)
+    const { mountDemoSwitcher } = await import('./demo-switcher.js');
+    mountDemoSwitcher();
+  </script>
+</body>
+</html>

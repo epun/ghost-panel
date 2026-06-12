@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./assets/branding/logo-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./assets/branding/logo-192.png">
+  <link rel="apple-touch-icon" href="./assets/branding/logo-192.png">
+  <title>Ghost Panel — 2D canvas demo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #ffffff; color: #fff; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    #canvas { display: block; width: 100%; height: 100%; }
+    #help {
+      position: fixed; bottom: 16px; right: 16px; z-index: 10;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 11px; color: rgba(255,255,255,0.7);
+      line-height: 1.6;
+      pointer-events: none;
+      max-width: 320px;
+    }
+    #help b { color: #fff; }
+    #help kbd {
+      background: rgba(255,255,255,0.1);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: ui-monospace, monospace;
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="help">
+    <b>Ghost Panel — 2D canvas pressure test</b><br>
+    <kbd>Shift+D</kbd> toggle panels · <kbd>Space</kbd> play / pause<br>
+    Scrub the graph editor — circles should move and pulse.<br>
+    Try <kbd>+ Bind property</kbd> in the graph editor to drive any of these objects.
+  </div>
+
+  <script type="module">
+    import { createGhostPanel } from './index.js';
+    import { mountDemoSwitcher } from './demo-switcher.js';
+    import { icons } from './icons.js';
+    mountDemoSwitcher();
+
+    const canvas = document.getElementById('canvas');
+    const ctx    = canvas.getContext('2d');
+
+    function fit() {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width  = innerWidth  * dpr;
+      canvas.height = innerHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    fit();
+    window.addEventListener('resize', fit);
+
+    // ── A tiny 2D "scene" — plain JS objects the Ghost Panel will animate. ──
+    // Each circle is a bag of numeric props the graph editor can write to.
+    // x/y are placed below, after first layout — innerWidth/innerHeight may
+    // be 0 here in headless / pre-paint contexts (e.g. preview iframes).
+    const palette = ['#ff5577', '#5577ff', '#ffaa44', '#44ffaa', '#aa66ff'];
+    const circles = palette.map((color, i) => {
+      const c = {
+        name:   `circle.${String(i + 1).padStart(2, '0')}`,
+        x:      0,
+        y:      0,
+        radius: 40,
+        hue:    (i * 70) % 360,
+        alpha:  1,
+        visible: true,
+      };
+      // Every circle gets a static `color` (its base fill) so the inspector's
+      // Properties → Color picker recolors it live. circle.04 is the lone
+      // exception: it showcases the animated `hue` track below, so we leave
+      // its color unset and let the hue keyframes drive the fill instead.
+      if (i !== 3) c.color = color;
+      return c;
+    });
+
+    const bg = { color: '#ffffff' };
+
+    // ── Animation loop — pure Canvas2D ─────────────────────────────────
+    function draw() {
+      ctx.fillStyle = bg.color;
+      ctx.fillRect(0, 0, innerWidth, innerHeight);
+
+      for (const c of circles) {
+        if (c.visible === false) continue;
+        ctx.save();
+        ctx.globalAlpha = c.alpha ?? 1;
+        // Precedence: explicit `fill` override → static `color` (its base
+        // fill, what the inspector's Color picker writes) → animated `hue`.
+        ctx.fillStyle = c.fill || c.color || `hsl(${c.hue ?? 0} 70% 55%)`;
+        ctx.translate(c.x, c.y);
+        if (c.rotation) ctx.rotate(c.rotation);
+        const stroke = (c.strokeWidth ?? 0) > 0;
+        if (c.kind === 'rect') {
+          const w = c.width, h = c.height, r = Math.min(c.cornerRadius ?? 0, w/2, h/2);
+          ctx.beginPath();
+          if (r > 0) {
+            // Rounded rect (Figma-style corner radius).
+            const x0 = -w/2, y0 = -h/2;
+            ctx.moveTo(x0 + r, y0);
+            ctx.arcTo(x0 + w, y0,     x0 + w, y0 + h, r);
+            ctx.arcTo(x0 + w, y0 + h, x0,     y0 + h, r);
+            ctx.arcTo(x0,     y0 + h, x0,     y0,     r);
+            ctx.arcTo(x0,     y0,     x0 + w, y0,     r);
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            ctx.fillRect(-w/2, -h/2, w, h);
+          }
+          if (stroke) {
+            ctx.lineWidth = c.strokeWidth;
+            ctx.strokeStyle = c.strokeColor || '#000';
+            if (r > 0) ctx.stroke();
+            else       ctx.strokeRect(-w/2, -h/2, w, h);
+          }
+        } else {
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.max(1, c.radius ?? 30), 0, Math.PI * 2);
+          ctx.fill();
+          if (stroke) {
+            ctx.lineWidth = c.strokeWidth;
+            ctx.strokeStyle = c.strokeColor || '#000';
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+      requestAnimationFrame(draw);
+    }
+    draw();
+
+    // Defer everything that captures viewport-dependent values until after
+    // first layout. Otherwise innerWidth/innerHeight can be 0 here and the
+    // keyframe literals would freeze the bound circles at the origin.
+    // Visibility-aware: rAF is suspended in hidden tabs (headless preview,
+    // backgrounded windows), so fall back to setTimeout so init still
+    // runs. Visible tabs keep the original rAF path.
+    const afterLayout = (cb) => {
+      if (document.hidden) setTimeout(cb, 50);
+      else requestAnimationFrame(cb);
+    };
+    afterLayout(() => {
+      const W = innerWidth || 1280;
+      const H = innerHeight || 720;
+
+      // Spread circles across the viewport now that it has been measured.
+      circles.forEach((c, i) => {
+        c.x = W * (0.2 + i * 0.15);
+        c.y = H * 0.5;
+      });
+
+      // ── Ghost Panel — force 2D + animation workflows; no Three.js context. ──
+      const ui = createGhostPanel({
+        title:    '2D Canvas',
+        scenePanel: true,
+        scenePanelTitle: 'Scene',
+        workflow: ['2d', 'animation'],
+        // ── Smart augment schema ──────────────────────────────────────────
+        // Declares every property the draw loop honors — including LATENT ones
+        // that don't exist on the object yet (strokeWidth, strokeColor,
+        // rotation, cornerRadius). When the user opens the ? bar and types a
+        // property name, Ghost Panel matches it here and adds a control wired
+        // straight to the object, so the canvas reacts on the next frame.
+        // A function so circles and rectangles expose the right shape props.
+        augmentProperties: (obj) => {
+          const W = innerWidth || 1280, H = innerHeight || 720;
+          const fillDefault = obj?.color || `hsl(${obj?.hue ?? 0} 70% 55%)`;
+          const common = [
+            { name: 'fill',        label: 'Fill',         type: 'color', default: fillDefault },
+            { name: 'strokeWidth', label: 'Stroke Width', type: 'number', min: 0, max: 40, step: 1, default: 4 },
+            { name: 'strokeColor', label: 'Stroke Color', type: 'color', default: '#ffffff' },
+            { name: 'rotation',    label: 'Rotation',     type: 'number', min: -Math.PI, max: Math.PI, step: 0.01, default: 0 },
+            { name: 'alpha',       label: 'Opacity',      type: 'number', min: 0, max: 1, step: 0.01 },
+            { name: 'x',           label: 'X',            type: 'number', min: 0, max: W, step: 1 },
+            { name: 'y',           label: 'Y',            type: 'number', min: 0, max: H, step: 1 },
+            { name: 'visible',     label: 'Visible',      type: 'boolean' },
+          ];
+          const shape = obj?.kind === 'rect'
+            ? [
+                { name: 'width',        label: 'Width',         type: 'number', min: 1, max: 600, step: 1 },
+                { name: 'height',       label: 'Height',        type: 'number', min: 1, max: 600, step: 1 },
+                { name: 'cornerRadius', label: 'Corner Radius', type: 'number', min: 0, max: 200, step: 1, default: 12 },
+              ]
+            : [
+                { name: 'radius', label: 'Radius', type: 'number', min: 1, max: 300, step: 1 },
+                { name: 'hue',    label: 'Hue',    type: 'number', min: 0, max: 360, step: 1 },
+              ];
+          return [...shape, ...common];
+        },
+        workflowOpts: {
+          duration: 4,
+          tracks: [
+            // Pre-bound tracks — the canvas reacts in real time.
+            { name: 'circle.01 → x', color: '#ff5577',
+              binding: { object: circles[0], path: 'x' },
+              keys: [
+                { time: 0,   value: W * 0.2, easing: 'easeInOut' },
+                { time: 2,   value: W * 0.8, easing: 'easeInOut' },
+                { time: 4,   value: W * 0.2, easing: 'easeInOut' },
+              ],
+            },
+            { name: 'circle.02 → y', color: '#5577ff',
+              binding: { object: circles[1], path: 'y' },
+              keys: [
+                { time: 0,   value: H * 0.5, easing: 'easeIn' },
+                { time: 1,   value: H * 0.2, easing: 'easeOut' },
+                { time: 2.5, value: H * 0.8, easing: 'easeInOut' },
+                { time: 4,   value: H * 0.5 },
+              ],
+            },
+            { name: 'circle.03 → radius', color: '#ffaa44',
+              binding: { object: circles[2], path: 'radius' },
+              keys: [
+                { time: 0, value: 20 },
+                { time: 2, value: 120, easing: 'easeOut' },
+                { time: 4, value: 20,  easing: 'easeIn' },
+              ],
+            },
+            { name: 'circle.04 → hue', color: '#44ffaa',
+              binding: { object: circles[3], path: 'hue' },
+              keys: [
+                { time: 0, value: 0 },
+                { time: 4, value: 360, easing: 'linear' },
+              ],
+            },
+            { name: 'circle.05 → alpha', color: '#aa66ff',
+              binding: { object: circles[4], path: 'alpha' },
+              keys: [
+                { time: 0, value: 1 },
+                { time: 2, value: 0.1, easing: 'easeInOut' },
+                { time: 4, value: 1,   easing: 'easeInOut' },
+              ],
+            },
+          ],
+          // Targets surfaced by the "+ Bind property" picker
+          getBindableTargets: () => circles.map(c => ({ name: c.name, object: c })),
+        },
+      });
+
+      // Populate the Outliner — Ghost Panel auto-creates a generic ObjectManager
+      // for non-Three.js hosts. Every workflow (including pure 2D) gets the
+      // same scene-tree navigator on the left panel.
+      circles.forEach(c => ui.objectManager.register(c.name, c));
+
+      // Reconcile the draw list whenever the Outliner mutates the registry
+      // (× delete, programmatic remove, paste, add-menu, etc.) — the canvas
+      // reflects the change on the next frame.
+      ui.objectManager.on('change', () => {
+        const present = new Set(ui.objectManager.getNames());
+        for (let i = circles.length - 1; i >= 0; i--) {
+          if (!present.has(circles[i].name)) circles.splice(i, 1);
+        }
+      });
+      // Pick up paste / Add-menu spawns so they actually render.
+      ui.objectManager.on('register', (_name, object) => {
+        if (object && !circles.includes(object)) circles.push(object);
+      });
+
+      // Shift+D toggles the panel (matches the 3D demo's convention)
+      ui.bindToggleKey('D', { shift: true });
+
+      // ── Shift+A factories scoped to this 2D demo ──
+      // The Add menu is global; each workflow / host contributes factories.
+      // Here we contribute a few shape primitives that fit the 2D scene model.
+      const PALETTE = ['#ff5577', '#5577ff', '#ffaa44', '#44ffaa', '#aa66ff', '#66ddff'];
+      let circleCounter = circles.length;
+      ui._addMenu?.register({
+        id: '2d-circle', label: 'Circle', category: 'Shape', workflows: ['2d'], icon: icons.circle,
+        build: () => {
+          circleCounter += 1;
+          // Use the same viewport fallback as init — innerWidth/innerHeight
+          // are 0 in hidden/backgrounded tabs (headless preview, inactive
+          // window). Without the guard a shape added there lands at 0,0,
+          // stuck half-off-screen in the top-left corner. (1280×720 is the
+          // demo's default viewport, matching afterLayout above.)
+          const W = innerWidth || 1280, H = innerHeight || 720;
+          const c = {
+            name: `circle.${String(circleCounter).padStart(2, '0')}`,
+            x: W * (0.2 + Math.random() * 0.6),
+            y: H * (0.2 + Math.random() * 0.6),
+            radius: 30 + Math.random() * 50,
+            hue: Math.floor(Math.random() * 360),
+            alpha: 1,
+            visible: true,
+            color: PALETTE[circleCounter % PALETTE.length],
+          };
+          circles.push(c);
+          ui.objectManager.register(c.name, c);
+          ui.objectManager.select(c.name);
+          return c;
+        },
+      });
+      ui._addMenu?.register({
+        id: '2d-rect', label: 'Rectangle', category: 'Shape', workflows: ['2d'], icon: icons.rectangle,
+        build: () => {
+          const W = innerWidth || 1280, H = innerHeight || 720;
+          const r = {
+            name: `rect.${String(circles.length + 1).padStart(2, '0')}`,
+            x: W * 0.4, y: H * 0.4,
+            width: 120, height: 80,
+            hue: Math.floor(Math.random() * 360),
+            alpha: 1, visible: true, kind: 'rect',
+            color: PALETTE[circles.length % PALETTE.length],
+          };
+          circles.push(r);
+          ui.objectManager.register(r.name, r);
+          ui.objectManager.select(r.name);
+          return r;
+        },
+      });
+
+      window.ui = ui;
+      window.circles = circles;
+    });
+  </script>
+</body>
+</html>
