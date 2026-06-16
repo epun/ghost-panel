@@ -38,6 +38,7 @@ import { UndoStack } from './undo-stack.js';
 import { showToast } from './toast.js';
 import { icons } from './icons.js';
 import { attachLearning } from './learning.js';
+import { attachTokenTracker } from './token-tracker.js';
 import { attachDiagnostics } from './diagnostics.js';
 import { attachAugment } from './augment.js';
 import { attachCanvasContextMenu } from './context-menu.js';
@@ -424,7 +425,7 @@ export function createGhostPanel(opts = {}) {
       });
       data.panels[p.title] = panelData;
     });
-    if (objectManager) {
+    if (objectManager && typeof objectManager.getState === 'function') {
       objectManager.getNames().forEach(n => {
         // Skip host-internal pseudo-objects (e.g. a gizmo-pivot 'Selection')
         // tagged __duiIgnore — they aren't part of the authored scene (§4.3).
@@ -453,7 +454,7 @@ export function createGhostPanel(opts = {}) {
         });
       });
     }
-    if (data.objects && objectManager) {
+    if (data.objects && objectManager && typeof objectManager.applyState === 'function') {
       Object.entries(data.objects).forEach(([n, state]) => {
         objectManager.applyState(n, state);
       });
@@ -1055,6 +1056,13 @@ export function createGhostPanel(opts = {}) {
       // Array of descriptors, or a fn (obj) => descriptors[] for per-object schemas.
       properties: opts.augmentProperties || null,
     });
+  }
+
+  // ── Token tracker — shows the tokens / $ saved by exporting a JSON diff ───
+  // instead of describing scene changes in prose to an AI assistant. Adds a
+  // "Token savings" folder + ui.tokenTracker. Opt out with tokenTracker: false.
+  if (opts.tokenTracker !== false) {
+    attachTokenTracker(ui, opts.tokenTrackerOpts || {});
   }
 
   return ui;

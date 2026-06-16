@@ -4554,6 +4554,110 @@ const CSS = /* css */ `
 :root.dui-theme-light .dui-diag-meta-inline { color: hsl(240 5% 55%); }
 :root.dui-theme-light .dui-diag-pill--hit  { background: hsl(142 70% 32% / 0.14); color: hsl(142 70% 28%); }
 :root.dui-theme-light .dui-diag-pill--miss { background: hsl(38 92% 40% / 0.16);  color: hsl(38 92% 32%); }
+
+/* ── Token tracker ──────────────────────────────────────────────────────────
+   Lives in the "Token savings" folder. Reads the tokens / $ saved by exporting
+   a JSON diff vs describing the change in prose to an AI assistant. The hero
+   number + "saved" row use a positive green (cf. the diagnostics hit pill) so
+   the win reads at a glance. */
+.dui-token-tracker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 2px;
+}
+.dui-token-hero {
+  text-align: center;
+  padding: 8px 8px 10px;
+  border-radius: var(--radius);
+  background: hsl(142 70% 40% / 0.08);
+  border: 1px solid hsl(142 70% 45% / 0.22);
+}
+.dui-token-hero-num {
+  font-family: var(--dui-font-mono);
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: hsl(142 65% 55%);
+}
+.dui-token-hero-sub {
+  margin-top: 3px;
+  font-size: 10px;
+  color: hsl(var(--muted-foreground));
+  letter-spacing: 0.01em;
+}
+.dui-token-rows { display: flex; flex-direction: column; gap: 2px; }
+.dui-token-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  padding: 3px 2px;
+  color: hsl(var(--muted-foreground));
+}
+.dui-token-row b {
+  font-family: var(--dui-font-mono);
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
+.dui-token-row--accent {
+  border-top: 1px solid hsl(var(--border));
+  margin-top: 2px;
+  padding-top: 6px;
+}
+.dui-token-row--accent b { color: hsl(142 65% 55%); }
+.dui-token-costs {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  background: hsl(var(--muted) / 0.4);
+}
+.dui-token-cost {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: hsl(var(--muted-foreground));
+}
+.dui-token-cost b {
+  font-family: var(--dui-font-mono);
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
+.dui-token-export {
+  appearance: none;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid hsl(142 70% 45% / 0.3);
+  border-radius: var(--radius);
+  background: hsl(142 70% 40% / 0.14);
+  color: hsl(142 60% 62%);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.dui-token-export:hover {
+  background: hsl(142 70% 42% / 0.22);
+  border-color: hsl(142 70% 50% / 0.45);
+}
+.dui-token-foot {
+  font-size: 9.5px;
+  line-height: 1.45;
+  text-align: center;
+  color: hsl(var(--muted-foreground) / 0.8);
+}
+/* Quiet, zeroed look until the first edit lands. */
+.dui-token-tracker.dui-token-empty .dui-token-hero { background: hsl(var(--muted) / 0.3); border-color: hsl(var(--border)); }
+.dui-token-tracker.dui-token-empty .dui-token-hero-num { color: hsl(var(--muted-foreground)); }
+.dui-token-tracker.dui-token-empty .dui-token-export { opacity: 0.55; pointer-events: none; }
 `;
 
 let injected = false;

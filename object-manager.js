@@ -83,6 +83,39 @@ export class ObjectManager {
   getObject(name) { return this.objects[name]?.object ?? null; }
   has(name) { return !!this.objects[name]; }
 
+  /**
+   * Serializable snapshot of a registered object's primitive own-properties.
+   * The lightweight manager has no transform proxy (that's SceneObjectManager's
+   * job), so we shallow-copy scalar fields (x, y, radius, color, opacity, …)
+   * and skip functions, DOM refs (`_el`) and nested objects/arrays so the
+   * export stays clean, hand-editable and acyclic. Mirrors the getState/
+   * applyState surface SceneObjectManager exposes, so toJSON()/fromJSON()
+   * (and the JSON exporters) work in 2D / web / audio hosts too.
+   */
+  getState(name) {
+    const obj = this.getObject(name);
+    if (!obj) return {};
+    const out = {};
+    for (const k in obj) {
+      if (k === 'name' || k.startsWith('_')) continue;
+      const t = typeof obj[k];
+      if (t === 'number' || t === 'string' || t === 'boolean') out[k] = obj[k];
+    }
+    return out;
+  }
+
+  /** Apply a snapshot produced by getState() back onto the object. */
+  applyState(name, state) {
+    const obj = this.getObject(name);
+    if (!obj || !state || typeof state !== 'object') return;
+    for (const k in state) {
+      if (k === 'name' || k.startsWith('_')) continue;
+      const t = typeof state[k];
+      if (t === 'number' || t === 'string' || t === 'boolean') obj[k] = state[k];
+    }
+    this.emit('change');
+  }
+
   select(name) {
     if (!this.objects[name]) return;
     this.activeName = name;
