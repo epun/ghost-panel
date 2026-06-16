@@ -7,14 +7,6 @@
       "runtimeArgs": ["run", "dev", "--", "--port", "7789", "--strictPort"],
       "port": 7789,
       "autoPort": false
-    },
-    {
-      "name": "brick-phone",
-      "runtimeExecutable": "/opt/homebrew/bin/node",
-      "runtimeArgs": ["node_modules/.bin/vite", "--port", "3001", "--strictPort"],
-      "cwd": "brick-phone-link",
-      "port": 3001,
-      "autoPort": false
     }
   ]
 }

@@ -5,7 +5,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="./assets/branding/logo-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="./assets/branding/logo-192.png">
   <link rel="apple-touch-icon" href="./assets/branding/logo-192.png">
-  <title>Ghost Panel — infinite canvas · Neo-Tokyo</title>
+  <title>Ghost Panel — infinite canvas · Tokyo</title>
   <style>
     * { box-sizing: border-box; }
     html, body {
@@ -47,17 +47,17 @@
       -webkit-user-drag: none;
     }
 
-    /* Scene-panel poster gallery — mixed portrait + landscape.
+    /* Scene-panel photo gallery — mixed portrait + landscape.
        Each thumb sets its own aspect ratio inline so the grid packs
        cleanly regardless of orientation. */
-    .akira-gallery {
+    .tokyo-gallery {
       padding: 8px 12px 14px;
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 6px;
       align-items: start;
     }
-    .akira-thumb {
+    .tokyo-thumb {
       position: relative;
       border-radius: 3px;
       overflow: hidden;
@@ -66,13 +66,13 @@
       border: 1px solid hsl(0 0% 100% / 0.06);
       transition: transform 120ms ease, border-color 120ms ease;
     }
-    .akira-thumb.portrait  { aspect-ratio: 545 / 800; }
-    .akira-thumb.landscape { aspect-ratio: 800 / 546; grid-column: span 2; }
-    .akira-thumb:hover {
+    .tokyo-thumb.portrait  { aspect-ratio: 545 / 800; }
+    .tokyo-thumb.landscape { aspect-ratio: 800 / 546; grid-column: span 2; }
+    .tokyo-thumb:hover {
       transform: translateY(-1px);
       border-color: #DA1F26;
     }
-    .akira-thumb img {
+    .tokyo-thumb img {
       width: 100%; height: 100%;
       object-fit: cover;
       display: block;
@@ -80,7 +80,7 @@
     /* Self-doubled selectors (`.x.x`) outscore the panel's
        `.ghost-panel * { font-family: inherit }` reset (0,1,1) so
        IBM Plex Mono wins. */
-    .akira-thumb-label.akira-thumb-label {
+    .tokyo-thumb-label.tokyo-thumb-label {
       position: absolute; left: 0; right: 0; bottom: 0;
       padding: 2px 4px;
       font-size: 8px;
@@ -91,7 +91,7 @@
       letter-spacing: 0.5px;
       text-transform: uppercase;
     }
-    .akira-gallery-header.akira-gallery-header {
+    .tokyo-gallery-header.tokyo-gallery-header {
       padding: 10px 12px 6px;
       font-size: 10px;
       font-family: 'IBM Plex Mono', ui-monospace, monospace;
@@ -124,7 +124,7 @@
 <body>
   <div class="stage" id="stage"><div class="scene3d" id="scene"></div></div>
   <div class="hint">
-    <b>NEO-TOKYO</b><br>
+    <b>TOKYO</b><br>
     <b>Drag</b> to move · <b>scroll</b> to fly forward/back<br>
     <kbd>W A S D</kbd> move · <kbd>Q E</kbd> up/down<br>
     <kbd>Shift+D</kbd> toggles panels
@@ -292,41 +292,36 @@
       return planes;
     }
 
-    // ── Akira poster library ───────────────────────────────────────
-    // Real Akira posters from Movie Night 4.23. Originals were 1125×1650
-    // PNGs totalling ~26MB; re-encoded to WebP at 800px max via
-    // Pillow (quality 72) → ~494KB total. Thumbnails at 200px →
-    // ~46KB total for the Scene-panel gallery.
+    // ── Tokyo photo library ────────────────────────────────────────
+    // Tokyo cityscapes from Unsplash (Unsplash License — free for
+    // commercial use, no attribution required). Downloaded at 1000px
+    // (full) and 400px (thumb) as JPEG into /assets/tokyo/.
     //
-    // To keep this purely an HTML asset reference, the imageUrl()
-    // function points at /assets/akira/akira-NN.webp and the gallery
-    // uses /assets/akira/akira-NN-thumb.webp.
-    // Posters 01–07 are portrait (the original AKIRA poster layout).
-    // Posters 08–12 are landscape compositions that were stored
-    // sideways in the source PNGs; the encoder rotates them upright,
-    // so we mark them 'landscape' here and the cell sizing follows.
-    const POSTER_NUMS = ['01', '03', '05', '06', '07', '08', '09', '10', '11', '12'];
-    const LANDSCAPE_SET = new Set(['08', '09', '10', '11', '12']);
-    const AKIRA_MOTIFS = POSTER_NUMS.map(n => ({
-      name: `Poster ${n}`,
-      full: `./assets/akira/akira-${n}.webp`,
-      thumb: `./assets/akira/akira-${n}-thumb.webp`,
+    // imageUrl() points at /assets/tokyo/tokyo-NN.jpg and the Scene-
+    // panel gallery uses /assets/tokyo/tokyo-NN-thumb.jpg. Orientation
+    // comes from each source photo's real dimensions: 03/05/06/09 are
+    // portrait, the rest landscape — the cell sizing follows the flag.
+    const PHOTO_NUMS = ['01', '02', '03', '04', '05', '06', '07', '08', '09'];
+    const LANDSCAPE_SET = new Set(['01', '02', '04', '07', '08']);
+    const TOKYO_PHOTOS = PHOTO_NUMS.map(n => ({
+      name: `Tokyo ${n}`,
+      full: `./assets/tokyo/tokyo-${n}.jpg`,
+      thumb: `./assets/tokyo/tokyo-${n}-thumb.jpg`,
       orientation: LANDSCAPE_SET.has(n) ? 'landscape' : 'portrait',
     }));
 
-    // Aspect ratio of the source posters (1125 × 1650 → 5:7.33).
-    // Portrait cells use plane.size as WIDTH and multiply for height;
-    // landscape cells swap the two.
-    const POSTER_AR = 800 / 545;        // long-side / short-side ≈ 1.468
+    // Source photos are ~3:2. Portrait cells use plane.size as WIDTH
+    // and multiply for height; landscape cells swap the two.
+    const PHOTO_AR = 3 / 2;             // long-side / short-side = 1.5
 
     function motifFor(mediaIndex) {
-      return AKIRA_MOTIFS[(mediaIndex >>> 0) % AKIRA_MOTIFS.length];
+      return TOKYO_PHOTOS[(mediaIndex >>> 0) % TOKYO_PHOTOS.length];
     }
 
-    // ── Photo URL — real Akira poster file ───────────────────────────
-    // 10 posters share across all 625 cells. The browser caches each
+    // ── Photo URL — local Tokyo photo file ───────────────────────────
+    // 9 photos share across all 625 cells. The browser caches each
     // file once at the network level, so even though many planes pull
-    // the same poster, it only downloads once.
+    // the same photo, it only downloads once.
     function imageUrl(mediaIndex /*, w, h */) {
       return motifFor(mediaIndex).full;
     }
@@ -343,7 +338,7 @@
       const img = document.createElement('img');
       img.draggable = false;
       img.loading = 'lazy';
-      // Decorative: these posters are a visual backdrop for the 3D-grid demo,
+      // Decorative: these photos are a visual backdrop for the 3D-grid demo,
       // not content a screen-reader user needs described. An explicit empty
       // alt marks them decorative (and silences the a11y advisory) rather than
       // leaving the attribute off, which reads as "unlabelled meaningful image".
@@ -362,15 +357,15 @@
       el = recycled.pop() || makeCell();
       el.style.display = '';
       el.style.visibility = '';
-      // Cell size depends on poster orientation. plane.size is the
-      // SHORT side; we multiply by POSTER_AR for the long side. For
-      // portrait posters that's height; for landscape it's width. With
+      // Cell size depends on photo orientation. plane.size is the
+      // SHORT side; we multiply by PHOTO_AR for the long side. For
+      // portrait photos that's height; for landscape it's width. With
       // PERSPECTIVE=800 at camera distance 50, a short-15 plane renders
       // at ~240px on its short side and ~352px on its long side.
       const motif = motifFor(plane.mediaIndex);
       const isLandscape = motif.orientation === 'landscape';
-      const pw = isLandscape ? plane.size * POSTER_AR : plane.size;
-      const ph = isLandscape ? plane.size              : plane.size * POSTER_AR;
+      const pw = isLandscape ? plane.size * PHOTO_AR : plane.size;
+      const ph = isLandscape ? plane.size              : plane.size * PHOTO_AR;
       el.style.width  = `${pw}px`;
       el.style.height = `${ph}px`;
       // NB: img.src is set lazily on first paint where opacity>0, so
@@ -563,7 +558,7 @@
               //   ty = flipped Y (CSS Y is down)
               //   tz = P + localZ  → CSS scales by P/(P-tz)=P/-localZ.
               // Subtract half width/height to centre the cell on its
-              // world point — portrait posters are taller than wide.
+              // world point — portrait photos are taller than wide.
               const sx = halfW + localX - el._pw / 2;
               const sy = halfH - localY - el._ph / 2;
               const sz = P + localZ;
@@ -673,7 +668,7 @@
     // no host wiring needed.
     const ui = createGhostPanel({
       title: 'Inspector',
-      scenePanelTitle: 'Scene · Neo-Tokyo',
+      scenePanelTitle: 'Scene · Tokyo',
       visible: true,
       workflow: ['web', 'animation'],
       workflowOpts: {
@@ -683,20 +678,20 @@
     });
 
     // ── Scene-panel photo gallery ───────────────────────────────────
-    // Show every Akira motif that lives in the grid so the Scene panel
+    // Show every Tokyo photo that lives in the grid so the Scene panel
     // is a real index of "what's out there". Click → fly to the nearest
     // visible photo of that motif via the existing tween system.
     if (ui.scenePanel?.body) {
       const header = document.createElement('div');
-      header.className = 'akira-gallery-header';
-      header.textContent = `Posters · ${AKIRA_MOTIFS.length} in scene`;
+      header.className = 'tokyo-gallery-header';
+      header.textContent = `Photos · ${TOKYO_PHOTOS.length} in scene`;
       ui.scenePanel.body.appendChild(header);
 
       const gallery = document.createElement('div');
-      gallery.className = 'akira-gallery';
-      AKIRA_MOTIFS.forEach((motif, idx) => {
+      gallery.className = 'tokyo-gallery';
+      TOKYO_PHOTOS.forEach((motif, idx) => {
         const tile = document.createElement('div');
-        tile.className = `akira-thumb ${motif.orientation}`;
+        tile.className = `tokyo-thumb ${motif.orientation}`;
         tile.title = `Fly to nearest ${motif.name}`;
         tile.dataset.motifIndex = String(idx);
         const img = document.createElement('img');
@@ -705,7 +700,7 @@
         img.loading = 'lazy';
         img.decoding = 'async';
         const label = document.createElement('div');
-        label.className = 'akira-thumb-label';
+        label.className = 'tokyo-thumb-label';
         label.textContent = motif.name;
         tile.appendChild(img);
         tile.appendChild(label);
@@ -726,7 +721,7 @@
               for (let dz = -R; dz <= R; dz++) {
                 const planes = chunkPlanes(cx + dx, cy + dy, cz + dz);
                 for (const p of planes) {
-                  if ((p.mediaIndex >>> 0) % AKIRA_MOTIFS.length !== idx) continue;
+                  if ((p.mediaIndex >>> 0) % TOKYO_PHOTOS.length !== idx) continue;
                   const ddx = p.x - STATE.camX, ddy = p.y - STATE.camY, ddz = p.z - STATE.camZ;
                   const d2 = ddx*ddx + ddy*ddy + ddz*ddz;
                   if (d2 < bestDist) { bestDist = d2; best = p; }
