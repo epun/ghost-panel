@@ -51,7 +51,6 @@
     "./dev-mode": "./dev-mode.js",
     "./demo-switcher": "./demo-switcher.js",
     "./learning": "./learning.js",
-    "./token-tracker": "./token-tracker.js",
     "./vite-plugin": "./vite-plugin-ghost-panel.js"
   },
   "files": [

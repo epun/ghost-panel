@@ -38,7 +38,6 @@ import { UndoStack } from './undo-stack.js';
 import { showToast } from './toast.js';
 import { icons } from './icons.js';
 import { attachLearning } from './learning.js';
-import { attachTokenTracker } from './token-tracker.js';
 import { attachDiagnostics } from './diagnostics.js';
 import { attachAugment } from './augment.js';
 import { attachCanvasContextMenu } from './context-menu.js';
@@ -1056,13 +1055,6 @@ export function createGhostPanel(opts = {}) {
       // Array of descriptors, or a fn (obj) => descriptors[] for per-object schemas.
       properties: opts.augmentProperties || null,
     });
-  }
-
-  // ── Token tracker — shows the tokens / $ saved by exporting a JSON diff ───
-  // instead of describing scene changes in prose to an AI assistant. Adds a
-  // "Token savings" folder + ui.tokenTracker. Opt out with tokenTracker: false.
-  if (opts.tokenTracker !== false) {
-    attachTokenTracker(ui, opts.tokenTrackerOpts || {});
   }
 
   return ui;
