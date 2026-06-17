@@ -1038,7 +1038,7 @@ export function createGhostPanel(opts = {}) {
   // visible: false and never show the panel to end users).
   if (opts.diagnostics !== false) {
     attachDiagnostics(ui, {
-      repo: opts.diagnosticsRepo || 'https://github.com/your-org/ghost-panel',
+      repo: opts.diagnosticsRepo || 'https://github.com/epun/ghost-panel',
     });
   }
 

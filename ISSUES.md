@@ -1,9 +1,9 @@
 # Ghost Panel — Integration Issue Log
 
-Bugs, feature gaps, and integration friction surfaced while embedding Ghost Panel
-in a host Three.js project. Each entry notes the symptom as reported, the root
-cause found, and the workaround applied in the HOST project — i.e., what the
-library could absorb so the next host doesn't have to.
+Known integration gaps, bugs, and friction surfaced while embedding Ghost Panel
+in host projects. Each entry notes the symptom, root cause, and suggested library
+fix. This file is a **public roadmap** — for new reports, please open a
+[GitHub Issue](https://github.com/epun/ghost-panel/issues).
 
 ---
 

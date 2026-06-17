@@ -55,7 +55,7 @@ export class DiagnosticEngine {
   constructor(ui, opts = {}) {
     this.ui      = ui;
     this.opts    = opts;
-    this.repo    = opts.repo || 'https://github.com/your-org/ghost-panel';
+    this.repo    = opts.repo || 'https://github.com/epun/ghost-panel';
     this.issues  = [];
     this.status  = 'checking'; // 'healthy' | 'warning' | 'error' | 'checking'
     this._updateFired = false;

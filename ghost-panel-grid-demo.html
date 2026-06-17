@@ -294,19 +294,28 @@
 
     // ── Tokyo photo library ────────────────────────────────────────
     // Tokyo cityscapes from Unsplash (Unsplash License — free for
-    // commercial use, no attribution required). Downloaded at 1000px
-    // (full) and 400px (thumb) as JPEG into /assets/tokyo/.
-    //
-    // imageUrl() points at /assets/tokyo/tokyo-NN.jpg and the Scene-
-    // panel gallery uses /assets/tokyo/tokyo-NN-thumb.jpg. Orientation
-    // comes from each source photo's real dimensions: 03/05/06/09 are
-    // portrait, the rest landscape — the cell sizing follows the flag.
+    // commercial use). Served via images.unsplash.com CDN so clones
+    // work without committing large binaries. See assets/tokyo/README.md.
+    const UNSPLASH = (id, w = 1000) =>
+      `https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=80`;
     const PHOTO_NUMS = ['01', '02', '03', '04', '05', '06', '07', '08', '09'];
     const LANDSCAPE_SET = new Set(['01', '02', '04', '07', '08']);
+    // Unsplash photo paths (photo-… slugs)
+    const TOKYO_IDS = {
+      '01': 'photo-1540959733336-eab4deabeeaf',
+      '02': 'photo-1513407030342-c985a97dedfd',
+      '03': 'photo-1503899038394-31689e775b9f',
+      '04': 'photo-1528164344705-47542687000d',
+      '05': 'photo-1493976040374-85c8e12f0c0e',
+      '06': 'photo-1536098561742-ca998e09cbcc',
+      '07': 'photo-1524413842347-1c45d1c9db32',
+      '08': 'photo-1492571350029-22d51633c0a8',
+      '09': 'photo-1542051841857-5f90071e7989',
+    };
     const TOKYO_PHOTOS = PHOTO_NUMS.map(n => ({
       name: `Tokyo ${n}`,
-      full: `./assets/tokyo/tokyo-${n}.jpg`,
-      thumb: `./assets/tokyo/tokyo-${n}-thumb.jpg`,
+      full: UNSPLASH(TOKYO_IDS[n], 1000),
+      thumb: UNSPLASH(TOKYO_IDS[n], 400),
       orientation: LANDSCAPE_SET.has(n) ? 'landscape' : 'portrait',
     }));
 

@@ -155,7 +155,7 @@ createApp(App).use(GhostPanelPlugin).mount('#app');
 <details>
 <summary><b>Claude Code / OpenAI Codex / Cursor (AI coding agents)</b></summary>
 
-Ghost Panel is npm-installable, fully typed-via-JSDoc, and ships a machine-readable surface at `AGENTS.md`. To wire it into any project an AI agent is editing:
+Ghost Panel is npm-installable, ships a JSDoc-annotated API, and includes a machine-readable surface at `AGENTS.md`. To wire it into any project an AI agent is editing:
 
 ```bash
 npm install ghost-panel
