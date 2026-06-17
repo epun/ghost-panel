@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="./assets/branding/hero.webp" alt="Ghost Panel — debug tools for designers" width="720">
+  <img src="./assets/branding/hero.webp" alt="Ghost Panel — self-aware inspector for designers" width="720">
 </p>
 
 # Ghost Panel
 
-**A self-aware debug panel for the web.** Drop it into any Three.js scene, 2D canvas, or DOM page. It scans your project, mounts only the controls that fit, and stays out of the way. Press `Shift+D` to toggle the panel — `Shift+A` opens the add menu whenever you need more.
+**A self-aware inspector panel for the web.** Drop it into any Three.js scene, 2D canvas, or DOM page. It scans your project, mounts only the controls that fit, and stays out of the way. Press `Shift+D` to toggle the panel — `Shift+A` opens the add menu whenever you need more.
 
 ---
 
 ## Why Ghost Panel
 
-Most debug UIs ask you to declare what controls should exist. Ghost Panel decides for you.
+Most inspector panels ask you to declare what controls should exist. Ghost Panel decides for you.
 
 - **Scans your project on load.** Walks your Three.js scene, your DOM, your shape registry — whichever applies — and registers everything it finds. No `register()` boilerplate.
 - **Mounts the right controls for the selection.** Click a mesh, the **Material** panel appears. Click a camera, **Camera Settings**. Click a light, intensity + color. Animation data in the scene? The **Graph Editor** appears on its own.

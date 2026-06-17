@@ -2,7 +2,7 @@
   "name": "ghost-panel",
   "version": "0.1.0",
   "type": "module",
-  "description": "Drop-in workflow-aware debug UI for Three.js / 2D canvas / web. Outliner, mini transform toolbar, graph editor, undo, copy/paste, exporters.",
+  "description": "Ghost Panel — workflow-aware inspector for Three.js / 2D canvas / web. Outliner, mini transform toolbar, graph editor, undo, copy/paste, exporters.",
   "keywords": [
     "three",
     "threejs",

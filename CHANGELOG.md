@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial public release of Ghost Panel — workflow-aware debug UI for Three.js, 2D canvas, and web/DOM projects.
+- Initial public release of Ghost Panel — workflow-aware inspector for Three.js, 2D canvas, and web/DOM projects.
 - Auto-scanning project detection, contextual inspector folders, outliner, mini transform toolbar, graph editor, undo/redo, exporters.
 - Framework adapters: React, Vue, Svelte, Solid (`ghost-panel/react`, `/vue`, `/svelte`, `/solid`).
 - Skills registry with machine-readable [AGENTS.md](AGENTS.md) surface for AI coding agents.

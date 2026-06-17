@@ -27,7 +27,7 @@ fix and coordinated disclosure timeline.
 
 ## Scope notes
 
-Ghost Panel is a **client-side debug UI** intended for development workflows. It
+Ghost Panel is a **client-side inspector panel** intended for development workflows. It
 is not hardened for untrusted end-user input in production. Do not expose the panel
 to untrusted users without reviewing your integration (e.g. `visible: false` in
 production, custom `augment` / `learning` settings).
