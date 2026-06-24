@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/branding/hero.webp" alt="Ghost Panel — self-aware inspector for designers" width="720">
+  <img src="./assets/branding/hero.gif" alt="Ghost Panel — self-aware inspector for designers (live demo)" width="720">
 </p>
 
 # Ghost Panel
