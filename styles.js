@@ -4554,6 +4554,164 @@ const CSS = /* css */ `
 :root.dui-theme-light .dui-diag-meta-inline { color: hsl(240 5% 55%); }
 :root.dui-theme-light .dui-diag-pill--hit  { background: hsl(142 70% 32% / 0.14); color: hsl(142 70% 28%); }
 :root.dui-theme-light .dui-diag-pill--miss { background: hsl(38 92% 40% / 0.16);  color: hsl(38 92% 32%); }
+
+/* ── Light-mode overrides for IN-PANEL controls + the contextual toolbar ──
+   The slider chrome, the number/text/select row chrome, their inline labels,
+   and every contextual-toolbar control (buttons, axis cells/tags, the X/Y/Z
+   numeric inputs, the align + material-debug pills) are painted with a hard-
+   coded WHITE scale (hsl(0 0% 100% / …)) tuned for the dark panel. Those
+   values don't reference the theme vars, so when the panel background flips to
+   white in light mode the labels, value readouts and pills wash out to white-
+   on-white — which is why the right (Inspector) panel looked broken next to
+   the left (Scene) panel. These rules mirror that white scale with an
+   equivalent DARK scale so the inspector reads with the same contrast as the
+   scene panel. Additive only — dark mode (no .dui-theme-light) is untouched. */
+
+/* Slider — track / fill / ticks / indicator */
+:root.dui-theme-light .dui-slider-row .dui-slider {
+  background: hsl(240 6% 10% / 0.04);
+  border-color: hsl(240 6% 10% / 0.1);
+}
+:root.dui-theme-light .dui-slider:hover { background: hsl(240 6% 10% / 0.07); }
+:root.dui-theme-light .dui-slider:focus,
+:root.dui-theme-light .dui-slider.dui-slider-active {
+  background: hsl(240 6% 10% / 0.09);
+  border-color: hsl(240 6% 10% / 0.18);
+}
+:root.dui-theme-light .dui-slider-fill { background: hsl(240 6% 10% / 0.12); }
+:root.dui-theme-light .dui-slider:hover .dui-slider-fill            { background: hsl(240 6% 10% / 0.16); }
+:root.dui-theme-light .dui-slider.dui-slider-active .dui-slider-fill { background: hsl(240 6% 10% / 0.2); }
+:root.dui-theme-light .dui-slider-tick { background: hsl(240 6% 10% / 0.25); }
+:root.dui-theme-light .dui-slider-indicator {
+  background: hsl(240 6% 10% / 0.55);
+  box-shadow: 0 0 4px hsl(0 0% 100% / 0.7);
+}
+/* Inline slider label + value — dark text with a light (white) halo: the
+   mirror of the dark-mode white-text-with-dark-halo treatment, so the text
+   stays crisp as the fill bar slides under it. */
+:root.dui-theme-light .dui-slider-label {
+  color: hsl(240 10% 20%);
+  text-shadow: 0 1px 1px hsl(0 0% 100% / 0.75), 0 0 3px hsl(0 0% 100% / 0.6);
+}
+:root.dui-theme-light .dui-slider-value {
+  color: hsl(240 10% 12%);
+  text-shadow: 0 1px 1px hsl(0 0% 100% / 0.75), 0 0 3px hsl(0 0% 100% / 0.6);
+}
+:root.dui-theme-light .dui-slider-editor {
+  background: hsl(0 0% 100% / 0.9);
+  border-color: hsl(240 6% 10% / 0.25);
+  color: hsl(240 10% 10%);
+}
+
+/* Curve / easing editor — the track, grid, diagonal, the curve path itself
+   and the draggable control points are all drawn in white for the dark panel.
+   Flip them to a dark-on-light scale so the curve stays visible. */
+:root.dui-theme-light .dui-curve {
+  background: hsl(240 6% 10% / 0.03);
+  border-color: hsl(240 6% 10% / 0.1);
+}
+:root.dui-theme-light .dui-curve-grid line { stroke: hsl(240 6% 10% / 0.1); }
+:root.dui-theme-light .dui-curve-diag { stroke: hsl(240 6% 10% / 0.18); }
+:root.dui-theme-light .dui-curve-path { stroke: hsl(240 8% 25% / 0.85); }
+:root.dui-theme-light .dui-curve-handle-line { stroke: hsl(240 6% 10% / 0.25); }
+:root.dui-theme-light .dui-curve-cp {
+  fill: hsl(240 8% 20%);
+  stroke: hsl(0 0% 100% / 0.8);
+  filter: drop-shadow(0 1px 2px hsl(240 10% 10% / 0.25));
+}
+:root.dui-theme-light .dui-curve-cp:hover { fill: hsl(240 10% 12%); }
+:root.dui-theme-light .dui-curve-cp-dragging { fill: hsl(38 90% 45%); }
+
+/* Number / text / select row chrome + inline labels. Triple .ghost-panel to
+   outscore the base rule that paints the white chrome at the same specificity. */
+:root.dui-theme-light .ghost-panel.ghost-panel.ghost-panel .dui-number-row,
+:root.dui-theme-light .ghost-panel.ghost-panel.ghost-panel .dui-text-row,
+:root.dui-theme-light .ghost-panel.ghost-panel.ghost-panel .dui-select-row {
+  background: hsl(240 6% 10% / 0.04);
+  border-color: hsl(240 6% 10% / 0.1);
+}
+:root.dui-theme-light .ghost-panel.ghost-panel.ghost-panel .dui-number-row:hover,
+:root.dui-theme-light .ghost-panel.ghost-panel.ghost-panel .dui-text-row:hover,
+:root.dui-theme-light .ghost-panel.ghost-panel.ghost-panel .dui-select-row:hover {
+  background: hsl(240 6% 10% / 0.07);
+}
+:root.dui-theme-light .ghost-panel.ghost-panel.ghost-panel .dui-number-row:focus-within,
+:root.dui-theme-light .ghost-panel.ghost-panel.ghost-panel .dui-text-row:focus-within,
+:root.dui-theme-light .ghost-panel.ghost-panel.ghost-panel .dui-select-row:focus-within {
+  background: hsl(240 6% 10% / 0.09);
+  border-color: hsl(240 6% 10% / 0.18);
+}
+:root.dui-theme-light .dui-inline-label { color: hsl(240 4% 40%); }
+
+/* ── Contextual mode toolbar (anchored to the Inspector's left edge) ──
+   The toolbar background already flips to white glass above; these rules flip
+   its still-white contents so the move/rotate/scale buttons, collapse handle,
+   X/Y/Z numeric cells, axis tags and the align / material-debug pills stay
+   legible on that light glass. */
+:root.dui-theme-light .dui-context-btn { color: hsl(240 6% 25%); }
+:root.dui-theme-light .dui-context-btn:hover {
+  background: hsl(240 6% 10% / 0.08);
+  color: hsl(240 10% 8%);
+}
+:root.dui-theme-light .dui-context-btn.dui-active,
+:root.dui-theme-light .dui-context-camera.dui-active {
+  background: hsl(240 6% 10% / 0.12);
+  color: hsl(240 10% 8%);
+}
+:root.dui-theme-light .dui-context-collapse { color: hsl(240 5% 45%); }
+:root.dui-theme-light .dui-context-collapse:hover {
+  color: hsl(240 10% 8%);
+  background: hsl(240 6% 10% / 0.06);
+}
+:root.dui-theme-light .dui-context-row-align,
+:root.dui-theme-light .dui-context-row-debug { border-top-color: hsl(240 6% 10% / 0.08); }
+:root.dui-theme-light .dui-context-row-align .dui-context-align.dui-context-align-pulse {
+  background: hsl(210 90% 55% / 0.18);
+  color: hsl(210 90% 38%);
+}
+:root.dui-theme-light .dui-context-row-debug .dui-context-debug.dui-active {
+  background: hsl(48 100% 50% / 0.2);
+  color: hsl(38 92% 32%);
+  box-shadow: inset 0 0 0 1px hsl(48 90% 45% / 0.4);
+}
+/* X/Y/Z numeric inputs + their axis-colored tags */
+:root.dui-theme-light .dui-context-num {
+  background: hsl(240 6% 10% / 0.04);
+  color: hsl(240 10% 15%);
+  border-color: hsl(240 6% 10% / 0.1);
+}
+:root.dui-theme-light .dui-context-num:hover { background: hsl(240 6% 10% / 0.07); }
+:root.dui-theme-light .dui-context-num:focus {
+  background: hsl(240 6% 10% / 0.09);
+  border-color: hsl(240 6% 10% / 0.25);
+}
+:root.dui-theme-light .dui-axis-cell {
+  background: hsl(240 6% 10% / 0.04);
+  border-color: hsl(240 6% 10% / 0.1);
+}
+:root.dui-theme-light .dui-axis-cell:hover { background: hsl(240 6% 10% / 0.07); }
+:root.dui-theme-light .dui-axis-cell:focus-within {
+  background: hsl(240 6% 10% / 0.09);
+  border-color: hsl(240 6% 10% / 0.25);
+}
+/* Axis cell already provides the chrome — keep the wrapped input transparent
+   so the cell + tag still read as a single chip (mirrors the dark rule). */
+:root.dui-theme-light .dui-axis-cell .dui-context-num,
+:root.dui-theme-light .dui-axis-cell .dui-context-num:hover,
+:root.dui-theme-light .dui-axis-cell .dui-context-num:focus {
+  background: transparent;
+  border: none;
+}
+:root.dui-theme-light .dui-axis-tag {
+  background: hsl(240 6% 10% / 0.06);
+  color: hsl(240 10% 25%);
+}
+/* Darken the Blender axis colors so they read on the light cell instead of
+   the dark-mode 70%-lightness tints. */
+:root.dui-theme-light .dui-axis-x   { color: hsl(0   72% 45%); }
+:root.dui-theme-light .dui-axis-y   { color: hsl(120 55% 32%); }
+:root.dui-theme-light .dui-axis-z   { color: hsl(210 90% 45%); }
+:root.dui-theme-light .dui-axis-rot { color: hsl(280 60% 50%); }
 `;
 
 let injected = false;
