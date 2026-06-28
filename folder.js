@@ -196,6 +196,10 @@ export class Folder {
    *  called on undo/redo. Called after the factory returns. */
   _bindUndo(opts, handle) {
     if (opts?.__undoBind) opts.__undoBind.current = handle;
+    // Optional live read-back: if the caller bound this control to an object
+    // property (`read: () => obj.scale.x`), expose it so exports snapshot the
+    // LIVE value instead of the stale cached UI value. See issue #13 / §4.1.
+    if (handle && typeof opts?.read === 'function') handle._read = opts.read;
     return handle;
   }
 

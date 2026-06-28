@@ -267,6 +267,7 @@ export function createGhostPanel(opts = {}) {
   let cameraFolder = null;
   let sceneObjectsView = null;
   let gizmos = null;
+  const toggleKeyHandlers = [];   // window keydown listeners to remove on dispose (#15)
   if (scene && camera && renderer) {
     objectManager = new SceneObjectManager({ scene, camera, renderer, controls });
     // Host-configurable gizmo behavior (see opts above).
@@ -357,7 +358,7 @@ export function createGhostPanel(opts = {}) {
     // otherwise pop the browser's bookmark dialog — preventDefault stops
     // that. This makes the canonical "Toggle UI" gesture work without the
     // user remembering which modifier the demo wired up.
-    window.addEventListener('keydown', (e) => {
+    const onToggleKey = (e) => {
       if (e.key !== key && e.key.toUpperCase() !== key.toUpperCase()) return;
       const exact =
         !!e.shiftKey === !!shift && !!e.ctrlKey === !!ctrl &&
@@ -371,7 +372,11 @@ export function createGhostPanel(opts = {}) {
         if (panel.isVisible()) leftPanel.show();
         else leftPanel.hide();
       }
-    });
+    };
+    window.addEventListener('keydown', onToggleKey);
+    // Tracked so dispose() can remove it — a leaked listener pointing at a
+    // torn-down panel breaks React StrictMode double-mounts. See issue #15.
+    toggleKeyHandlers.push(onToggleKey);
   }
 
   function update() {
@@ -417,7 +422,11 @@ export function createGhostPanel(opts = {}) {
         if (folder._transient) return;
         const folderData = {};
         Object.entries(folder.controls).forEach(([cname, ctrl]) => {
-          if (ctrl.getValue) folderData[cname] = clean(ctrl.getValue());
+          // Prefer a live read-back (control bound to an object property via
+          // `read`) so the panels snapshot matches the object even after a
+          // gizmo / external move; fall back to the cached UI value. (#13 §4.1)
+          if (typeof ctrl._read === 'function') folderData[cname] = clean(ctrl._read());
+          else if (ctrl.getValue) folderData[cname] = clean(ctrl.getValue());
         });
         // Skip empty (action-only) folders — "Move selection": {} etc. (§4.3).
         if (Object.keys(folderData).length) panelData[fname] = folderData;
@@ -505,6 +514,12 @@ export function createGhostPanel(opts = {}) {
       panel.dispose();
       leftPanel?.dispose();
       objectManager?.dispose();
+      // Complete teardown so a re-mount (e.g. React StrictMode's double-mount)
+      // is clean: drop the gizmo's window pointer listeners and our keydown
+      // handlers, none of which were being removed before. See issue #15 / §6.
+      gizmos?.dispose();
+      toggleKeyHandlers.forEach(h => window.removeEventListener('keydown', h));
+      if (ui._undoKeyHandler) window.removeEventListener('keydown', ui._undoKeyHandler);
     },
   };
 

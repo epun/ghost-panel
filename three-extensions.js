@@ -275,6 +275,10 @@ export class SceneObjectManager {
   register(name, object, opts = {}) {
     if (this.objects[name]) return;
     const entry = { object };
+    // Remember the parent the object lives under so getState() can detect host
+    // reparenting (e.g. a multi-select pivot rig) that would make the exported
+    // LOCAL transform pivot-relative and therefore wrong. See issue #9 / §1.2.
+    entry.registeredParent = object?.parent ?? null;
     // Optional explicit parent for outliner nesting — so hosts don't have to
     // reach into `objects[name].parentObj`. The parent should also be registered
     // (and expandable) for the child row to nest beneath it.
@@ -588,8 +592,46 @@ export class SceneObjectManager {
   }
 
   getState(name) {
-    const o = this.objects[name]?.object;
+    const entry = this.objects[name];
+    const o = entry?.object;
     if (!o) return null;
+    // o.position/rotation/scale are LOCAL (parent-relative). If a host reparents
+    // the object (e.g. under a multi-select pivot Group), an export taken while
+    // reparented serializes pivot-local coordinates instead of the authored
+    // transform. We keep emitting local values for backward compatibility
+    // (applyState writes local; existing exports must round-trip), but when the
+    // parent has changed we warn and attach the true WORLD transform so the
+    // export isn't silently corrupt. See issue #9 / ISSUES.md §1.2.
+    if (entry) {
+      // Establish the baseline lazily for objects registered before being added
+      // to the scene (parent was null at register time) — avoids false warnings.
+      if (entry.registeredParent == null && o.parent) entry.registeredParent = o.parent;
+      if (entry.registeredParent && o.parent && o.parent !== entry.registeredParent) {
+        console.warn(
+          `[GhostPanel] getState("${name}"): object is no longer under its ` +
+          `original parent (likely a host multi-select pivot rig). The exported ` +
+          `position/rotation/scale are LOCAL to the current parent and may not ` +
+          `match the authored transform — read state.world, or restore the ` +
+          `original parent before exporting. See ISSUES.md §1.2.`
+        );
+        const wp = new THREE.Vector3(), wq = new THREE.Quaternion(), ws = new THREE.Vector3();
+        o.updateWorldMatrix(true, false);
+        o.matrixWorld.decompose(wp, wq, ws);
+        const we = new THREE.Euler().setFromQuaternion(wq);
+        return {
+          position: { x: o.position.x, y: o.position.y, z: o.position.z },
+          rotation: { x: o.rotation.x, y: o.rotation.y, z: o.rotation.z },
+          scale: o.scale.x,
+          visible: o.visible,
+          reparented: true,
+          world: {
+            position: { x: wp.x, y: wp.y, z: wp.z },
+            rotation: { x: we.x, y: we.y, z: we.z },
+            scale: ws.x,
+          },
+        };
+      }
+    }
     return {
       position: { x: o.position.x, y: o.position.y, z: o.position.z },
       rotation: { x: o.rotation.x, y: o.rotation.y, z: o.rotation.z },
