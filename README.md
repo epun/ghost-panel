@@ -90,6 +90,16 @@ function App() {
   return <YourCanvas />;
 }
 ```
+
+> **StrictMode (dev):** React mounts → unmounts → remounts each effect, so the
+> panel is created, disposed, and recreated. `ui.dispose()` now fully tears down
+> (gizmo + keydown listeners included), so this is clean. If you stash your own
+> debug handle on `window`, tag it and self-invalidate on cleanup so the global
+> can't end up pointing at the disposed instance:
+> ```js
+> window.__ghostUI = ui;
+> return () => { if (window.__ghostUI === ui) delete window.__ghostUI; ui.dispose(); };
+> ```
 </details>
 
 <details>
@@ -477,6 +487,17 @@ f.addRaw      (htmlElement)           // bring your own widget
 
 f.get('id').setValue(x)               // programmatic update
 f.collapse() · f.expand() · f.toggleCollapsed()
+```
+
+Any value control also takes an optional **`read`** callback — a live read-back of
+the bound property. Without it, `ui.toJSON()` snapshots the control's last UI value,
+which goes stale if the object is moved by the gizmo or external code. With it, the
+export reads the real value:
+
+```js
+f.addSlider('Pos X', { min: -10, max: 10, value: obj.position.x,
+  onChange: v => obj.position.x = v,
+  read:     () => obj.position.x });   // keeps the export in sync with the object
 ```
 
 ---

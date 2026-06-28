@@ -37,6 +37,9 @@ fix. This file is a **public roadmap** — for new reports, please open a
 - **Suggested fix:** `getState` should serialize **world** transforms (or both),
   or at minimum document that registered objects must stay under their original
   parent for exports to be meaningful.
+- **Resolved (#9):** `register()` records the object's parent; `getState()` warns
+  when that parent has changed and attaches the true `world` transform to the
+  export. Local values stay as-is so normal round-trips are unaffected.
 
 ### 1.3 Two coexisting gizmos are easy to end up with, hard to coordinate
 - **Symptom:** picking one child mesh of a registered group drove the *library*
@@ -130,6 +133,9 @@ fix. This file is a **public roadmap** — for new reports, please open a
 - **Suggested fix:** controls need a `bind`/`refresh` path (read-back function
   evaluated at export time), or `toJSON` should prefer live object state for
   transform-like controls.
+- **Resolved (#13):** value controls accept an optional `read` read-back;
+  `toJSON()` prefers it over the cached UI value when present (falls back to
+  `getValue()`), so bound controls export the live object state.
 
 ### 4.2 Contextual folders leak into exports nondeterministically
 - **Symptom:** "JSON missing different properties" between exports: one export
@@ -186,6 +192,11 @@ fix. This file is a **public roadmap** — for new reports, please open a
   self-invalidate on dispose — a host `dispose()` guard
   (`if (window.handle.__root === root) delete window.handle`) is the right
   pattern.
+- **Resolved (#15):** the library owns no window globals (the `window.ui` handles
+  live only in the demos), but `dispose()` was leaking the gizmo's window pointer
+  listeners and the toggle/undo keydown listeners — it now removes all of them, so
+  a StrictMode double-mount is clean. The host guard pattern is documented in the
+  README's React section.
 - **toJSON has no schema/version field.** Round-tripping exports across code
   changes (controls renamed, folders merged) silently drops values. A
   `version`/`schema` field plus unknown-key reporting on `fromJSON` would surface
