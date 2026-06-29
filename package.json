@@ -31,7 +31,7 @@
   ],
   "main": "./dist/ghost-panel.cjs",
   "module": "./index.js",
-  "unpkg":   "./dist/ghost-panel.umd.js",
+  "unpkg": "./dist/ghost-panel.umd.js",
   "jsdelivr": "./dist/ghost-panel.umd.js",
   "exports": {
     ".": {
@@ -39,12 +39,12 @@
       "require": "./dist/ghost-panel.cjs"
     },
     "./bundle": "./dist/ghost-panel.js",
-    "./umd":    "./dist/ghost-panel.umd.js",
+    "./umd": "./dist/ghost-panel.umd.js",
     "./source": "./index.js",
-    "./react":  "./adapters/react.js",
-    "./solid":  "./adapters/solid.js",
+    "./react": "./adapters/react.js",
+    "./solid": "./adapters/solid.js",
     "./svelte": "./adapters/svelte.js",
-    "./vue":    "./adapters/vue.js",
+    "./vue": "./adapters/vue.js",
     "./animation": "./animation.js",
     "./skills": "./skills.js",
     "./styles": "./styles.js",
@@ -64,17 +64,20 @@
   ],
   "scripts": {
     "dev": "vite",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
     "build": "vite build",
     "preview": "vite preview",
     "pack:tgz": "npm run build && npm pack",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
-    "three": ">=0.150.0 <1.0.0",
     "react": ">=18",
-    "vue": ">=3",
     "solid-js": ">=1",
-    "svelte": ">=4"
+    "svelte": ">=4",
+    "three": ">=0.150.0 <1.0.0",
+    "vue": ">=3"
   },
   "peerDependenciesMeta": {
     "three": {
@@ -94,7 +97,10 @@
     }
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.9",
+    "jsdom": "^28.1.0",
     "three": "^0.160.0",
-    "vite": "^5.0.0"
+    "vite": "^5.0.0",
+    "vitest": "^4.1.9"
   }
 }
