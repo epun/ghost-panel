@@ -1,184 +1,182 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ObjectManager } from '../object-manager.js';
 
 describe('ObjectManager', () => {
-  let manager;
+  let om;
 
   beforeEach(() => {
-    manager = new ObjectManager();
+    om = new ObjectManager();
   });
 
-  it('registers objects, re-registers without duplicate register events, and ignores falsy names', () => {
-    const events = [];
-    manager.on('register', (name, object) => events.push(['register', name, object]));
-    manager.on('change', () => events.push(['change']));
-
-    const object = { name: 'Cube' };
-    manager.register('Cube', object);
-    manager.register('Cube', { name: 'Cube', updated: true });
-    manager.register('', { name: 'ignored' });
-
-    expect(manager.getNames()).toEqual(['Cube']);
-    expect(manager.getObject('Cube')).toEqual({ name: 'Cube', updated: true });
-    expect(manager.has('Cube')).toBe(true);
-    expect(events.map(([type]) => type)).toEqual(['register', 'change', 'change']);
-  });
-
-  it('removes objects, deselects active entries, and no-ops for unknown names', () => {
-    const events = [];
-    manager.on('deselect', name => events.push(['deselect', name]));
-    manager.on('remove', (name, object) => events.push(['remove', name, object]));
-    manager.on('change', () => events.push(['change']));
-
-    const object = { name: 'Cube' };
-    manager.register('Cube', object);
-    events.length = 0;
-    manager.select('Cube');
-    events.length = 0;
-
-    manager.remove('Cube');
-    manager.remove('missing');
-
-    expect(manager.activeName).toBeNull();
-    expect(manager.getNames()).toEqual([]);
-    expect(events).toEqual([
-      ['deselect', 'Cube'],
-      ['change'],
-      ['remove', 'Cube', object],
-      ['change'],
-    ]);
-  });
-
-  it('renames entries, mirrors object.name, and rejects invalid or colliding names', () => {
-    const events = [];
-    manager.on('rename', (oldName, newName) => events.push(['rename', oldName, newName]));
-    manager.on('change', () => events.push(['change']));
-
-    const object = { name: 'Old' };
-    manager.register('Old', object);
-    manager.select('Old');
-    events.length = 0;
-
-    expect(manager.rename('', 'New')).toBe(false);
-    expect(manager.rename('Old', 'Old')).toBe(false);
-    expect(manager.rename('Missing', 'New')).toBe(false);
-    manager.register('Other', {});
-    events.length = 0;
-    expect(manager.rename('Old', 'Other')).toBe(false);
-
-    expect(manager.rename('Old', 'New')).toBe(true);
-    expect(manager.getObject('New')).toBe(object);
-    expect(manager.getObject('Old')).toBeNull();
-    expect(manager.activeName).toBe('New');
-    expect(object.name).toBe('New');
-    expect(events).toEqual([
-      ['rename', 'Old', 'New'],
-      ['change'],
-    ]);
-  });
-
-  it('serializes and reapplies only scalar state', () => {
-    const object = {
-      name: 'Thing',
-      x: 1,
-      label: 'hello',
-      visible: true,
-      nested: { a: 1 },
-      list: [1, 2],
-      fn() {},
-      _private: 10,
-    };
-    manager.register('Thing', object);
-
-    expect(manager.getState('Thing')).toEqual({
-      x: 1,
-      label: 'hello',
-      visible: true,
-    });
-
+  it('register ignores falsy names, emits register only for new entries, and always emits change', () => {
+    const register = vi.fn();
     const change = vi.fn();
-    manager.on('change', change);
-    manager.applyState('Thing', {
-      x: 4,
-      label: 'world',
-      visible: false,
-      name: 'skip',
-      _hidden: 99,
-      nested: { nope: true },
-      list: [3],
-      fn: () => {},
-    });
+    om.on('register', register);
+    om.on('change', change);
 
-    expect(object).toMatchObject({
-      x: 4,
-      label: 'world',
-      visible: false,
-      name: 'Thing',
-    });
-    expect(object.nested).toEqual({ a: 1 });
-    expect(object.list).toEqual([1, 2]);
+    om.register('', { id: 1 });
+    om.register('cube', { id: 1 });
+    om.register('cube', { id: 2 });
+
+    expect(om.getObject('cube')).toEqual({ id: 2 });
+    expect(register).toHaveBeenCalledTimes(1);
+    expect(register).toHaveBeenCalledWith('cube', { id: 1 });
+    expect(change).toHaveBeenCalledTimes(2);
+  });
+
+  it('remove no-ops when absent, deselects active entries, and emits remove then change', () => {
+    const events = [];
+    const push = event => (...args) => events.push([event, ...args]);
+    om.on('deselect', push('deselect'));
+    om.on('remove', push('remove'));
+    om.on('change', push('change'));
+
+    om.register('cube', { name: 'cube' });
+    om.select('cube');
+    events.length = 0;
+
+    om.remove('missing');
+    om.remove('cube');
+
+    expect(events).toEqual([
+      ['deselect', 'cube'],
+      ['change'],
+      ['remove', 'cube', { name: 'cube' }],
+      ['change'],
+    ]);
+    expect(om.activeName).toBeNull();
+    expect(om.has('cube')).toBe(false);
+  });
+
+  it('renames with validation, mirrors object.name, and updates the active name', () => {
+    const rename = vi.fn();
+    const change = vi.fn();
+    om.on('rename', rename);
+    om.on('change', change);
+    const object = { name: 'old', value: 1 };
+    om.register('old', object);
+    om.select('old');
+
+    expect(om.rename('', 'new')).toBe(false);
+    expect(om.rename('old', '')).toBe(false);
+    expect(om.rename('old', 'old')).toBe(false);
+    expect(om.rename('missing', 'new')).toBe(false);
+    om.register('taken', {});
+    expect(om.rename('old', 'taken')).toBe(false);
+
+    expect(om.rename('old', 'new')).toBe(true);
+    expect(om.getObject('new')).toBe(object);
+    expect(om.getObject('old')).toBeNull();
+    expect(om.activeName).toBe('new');
+    expect(object.name).toBe('new');
+    expect(rename).toHaveBeenCalledWith('old', 'new');
+    expect(change).toHaveBeenCalled();
+  });
+
+  it('setAll replaces the registry, emits remove for dropped entries, and emits change', () => {
+    const remove = vi.fn();
+    const change = vi.fn();
+    om.on('remove', remove);
+    om.on('change', change);
+    om.register('a', { id: 'a' });
+    om.register('b', { id: 'b' });
+    remove.mockClear();
+    change.mockClear();
+
+    om.setAll([
+      ['b', { id: 'b2' }],
+      ['c', { id: 'c' }],
+    ]);
+
+    expect(om.getNames().sort()).toEqual(['b', 'c']);
+    expect(om.getObject('b')).toEqual({ id: 'b2' });
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(remove).toHaveBeenCalledWith('a', { id: 'a' });
     expect(change).toHaveBeenCalledTimes(1);
   });
 
-  it('selects and deselects with change events and ignores unknown names', () => {
-    const events = [];
-    manager.on('select', name => events.push(['select', name]));
-    manager.on('deselect', name => events.push(['deselect', name]));
-    manager.on('change', () => events.push(['change']));
+  it('getNames, getObject, has, getState, and applyState filter correctly', () => {
+    om.register('thing', {
+      name: 'thing',
+      x: 1,
+      y: '2',
+      visible: true,
+      nested: { nope: true },
+      list: [1],
+      fn() {},
+      _secret: 4,
+    });
 
-    manager.select('missing');
-    expect(events).toEqual([]);
+    expect(om.getNames()).toEqual(['thing']);
+    expect(om.getObject('thing')?.x).toBe(1);
+    expect(om.has('thing')).toBe(true);
+    expect(om.has('missing')).toBe(false);
+    expect(om.getState('thing')).toEqual({ x: 1, y: '2', visible: true });
 
-    manager.register('Cube', {});
-    events.length = 0;
-    manager.select('Cube');
-    manager.deselect();
-    manager.deselect();
+    const change = vi.fn();
+    om.on('change', change);
+    om.applyState('thing', {
+      name: 'skip',
+      x: 3,
+      y: 4,
+      visible: false,
+      nested: {},
+      list: [],
+      fn: () => {},
+      _secret: 10,
+    });
 
-    expect(manager.activeName).toBeNull();
-    expect(events).toEqual([
-      ['select', 'Cube'],
-      ['change'],
-      ['deselect', 'Cube'],
-      ['change'],
-    ]);
+    expect(om.getObject('thing')).toMatchObject({ x: 3, y: 4, visible: false, name: 'thing' });
+    expect(change).toHaveBeenCalledTimes(1);
+    om.applyState('missing', { x: 1 });
+    om.applyState('thing', null);
+    om.applyState('thing', 'bad');
+    expect(change).toHaveBeenCalledTimes(1);
   });
 
-  it('replaces the full registry, emits remove for dropped entries, unsubscribes, swallows listener errors, and disposes', () => {
-    const events = [];
-    const listener = vi.fn(() => { throw new Error('listener failed'); });
-    const unsub = manager.on('change', listener);
-    manager.on('remove', name => events.push(['remove', name]));
-    manager.on('change', () => events.push(['change']));
+  it('select and deselect guard invalid inputs, emit events, and return through unsubscribe/off', () => {
+    const select = vi.fn();
+    const deselect = vi.fn();
+    const change = vi.fn();
+    const offSelect = om.on('select', select);
+    om.on('deselect', deselect);
+    om.on('change', change);
+    om.register('cube', {});
 
-    manager.register('A', { id: 'A' });
-    manager.register('B', { id: 'B' });
-    events.length = 0;
+    om.select('missing');
+    expect(select).not.toHaveBeenCalled();
 
-    manager.setAll([
-      ['B', { id: 'B', updated: true }],
-      ['C', { id: 'C' }],
-    ]);
+    om.select('cube');
+    expect(select).toHaveBeenCalledWith('cube');
+    expect(change).toHaveBeenCalledTimes(2);
 
-    expect(events).toEqual([
-      ['remove', 'A'],
-      ['change'],
-    ]);
+    offSelect();
+    om.select('cube');
+    expect(select).toHaveBeenCalledTimes(1);
 
-    unsub();
-    events.length = 0;
-    manager.emit('change');
-    expect(listener).toHaveBeenCalledTimes(3);
+    om.deselect();
+    expect(deselect).toHaveBeenCalledWith('cube');
+    expect(change).toHaveBeenCalledTimes(4);
 
-    manager.dispose();
-    expect(manager.getNames()).toEqual([]);
-    expect(manager.activeName).toBeNull();
-    expect(manager._listeners).toEqual({
-      change: [],
-      select: [],
-      deselect: [],
-      remove: [],
-      register: [],
-      rename: [],
-    });
+    om.deselect();
+    expect(deselect).toHaveBeenCalledTimes(1);
+  });
+
+  it('emit swallows listener errors and dispose resets state', () => {
+    const good = vi.fn();
+    const bad = vi.fn(() => { throw new Error('boom'); });
+    om.on('change', bad);
+    om.on('change', good);
+
+    expect(() => om.emit('change', 'x')).not.toThrow();
+    expect(good).toHaveBeenCalledWith('x');
+
+    om.register('cube', {});
+    om.select('cube');
+    om.dispose();
+
+    expect(om.getNames()).toEqual([]);
+    expect(om.activeName).toBeNull();
+    expect(om._listeners).toEqual({ change: [], select: [], deselect: [], remove: [], register: [], rename: [] });
   });
 });

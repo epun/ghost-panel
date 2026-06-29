@@ -1,3 +1,4 @@
+import { describe, expect, it, vi } from 'vitest';
 import { downloadBlob, getAllExporters, getAvailableExporters, registerExporter } from '../exports.js';
 
 describe('exports registry', () => {

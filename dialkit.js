@@ -14,9 +14,9 @@
  */
 
 import { icons } from './icons.js';
+import { clamp } from './utils.js';
 
 // ─── Math utils ──────────────────────────────────────────────────────────
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const lerp  = (a, b, t)   => a + (b - a) * t;
 const tau   = Math.PI * 2;
 

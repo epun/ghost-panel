@@ -1,167 +1,192 @@
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { UndoStack } from '../undo-stack.js';
 
 describe('UndoStack', () => {
   let nowSpy;
-  let warnSpy;
 
   beforeEach(() => {
     nowSpy = vi.spyOn(performance, 'now');
-    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    nowSpy.mockRestore();
-    warnSpy.mockRestore();
+    nowSpy?.mockRestore();
+    vi.restoreAllMocks();
   });
 
-  it('pushes, undoes, and redoes commands, including empty-stack return values', () => {
+  it('rejects invalid commands', () => {
     const stack = new UndoStack();
-    const state = { value: 0 };
-
-    expect(stack.undo()).toBe(false);
-    expect(stack.redo()).toBe(false);
-    expect(stack.canUndo()).toBe(false);
-    expect(stack.canRedo()).toBe(false);
-
-    nowSpy.mockReturnValue(10);
-    stack.push({
-      undo: () => { state.value = 0; },
-      redo: () => { state.value = 1; },
-    });
-
-    expect(stack.canUndo()).toBe(true);
-    expect(stack.canRedo()).toBe(false);
-
-    state.value = 1;
-    expect(stack.undo()).toBe(true);
-    expect(state.value).toBe(0);
-    expect(stack.canUndo()).toBe(false);
-    expect(stack.canRedo()).toBe(true);
-
-    expect(stack.redo()).toBe(true);
-    expect(state.value).toBe(1);
-    expect(stack.canUndo()).toBe(true);
-    expect(stack.canRedo()).toBe(false);
-  });
-
-  it('ignores invalid commands and clears future history on push', () => {
-    const stack = new UndoStack();
+    const emitted = vi.fn();
+    stack.on(emitted);
 
     stack.push(null);
-    stack.push({ undo: () => {} });
-    stack.push({ redo: () => {} });
+    stack.push({});
+    stack.push({ undo: vi.fn() });
+    stack.push({ redo: vi.fn() });
+
     expect(stack.canUndo()).toBe(false);
-
-    nowSpy.mockReturnValueOnce(1);
-    stack.push({
-      undo: () => {},
-      redo: () => {},
-    });
-    expect(stack.canUndo()).toBe(true);
-
-    expect(stack.undo()).toBe(true);
-    expect(stack.canRedo()).toBe(true);
-
-    nowSpy.mockReturnValueOnce(2);
-    stack.push({
-      undo: () => {},
-      redo: () => {},
-    });
     expect(stack.canRedo()).toBe(false);
+    expect(emitted).not.toHaveBeenCalled();
   });
 
-  it('coalesces matching commands inside the window and keeps the latest redo', () => {
-    const stack = new UndoStack({ coalesceMs: 100 });
-    const obj = { name: 'cube', value: 0 };
-    const events = [];
-    stack.on((s, reason) => events.push([s, reason]));
+  it('push clears redo history and emits push', () => {
+    const stack = new UndoStack();
+    const reasons = [];
+    stack.on((s, reason) => reasons.push(reason));
 
-    nowSpy.mockReturnValueOnce(10).mockReturnValueOnce(40);
-    stack.push(UndoStack.propEdit(obj, 'value', 0, 1));
-    stack.push(UndoStack.propEdit(obj, 'value', 1, 2));
+    const first = { undo: vi.fn(), redo: vi.fn() };
+    const second = { undo: vi.fn(), redo: vi.fn() };
+    nowSpy.mockReturnValueOnce(1).mockReturnValueOnce(2);
 
-    expect(stack.canUndo()).toBe(true);
-    expect(events.map(([, reason]) => reason)).toEqual(['push', 'push']);
-
-    expect(stack.undo()).toBe(true);
-    expect(obj.value).toBe(0);
+    stack.push(first);
+    stack.undo();
     expect(stack.canRedo()).toBe(true);
 
-    expect(stack.redo()).toBe(true);
-    expect(obj.value).toBe(2);
-    expect(stack.canUndo()).toBe(true);
+    stack.push(second);
 
-    expect(stack.undo()).toBe(true);
-    expect(stack.canUndo()).toBe(false);
+    expect(stack.canRedo()).toBe(false);
+    expect(reasons).toEqual(['push', 'undo', 'push']);
   });
 
-  it('treats different keys, no key, and expired edits as separate entries and enforces the limit', () => {
-    const stack = new UndoStack({ limit: 2, coalesceMs: 0 });
-    const obj = { name: 'mesh', a: 0, b: 0, c: 0, d: 0 };
+  it('coalesces commands with the same key within the window', () => {
+    const stack = new UndoStack({ coalesceMs: 200 });
+    const first = { undo: vi.fn(), redo: vi.fn(), coalesceKey: 'same' };
+    const second = { undo: vi.fn(), redo: vi.fn(), coalesceKey: 'same' };
 
-    nowSpy.mockReturnValueOnce(1);
-    stack.push(UndoStack.propEdit(obj, 'a', 0, 1));
+    nowSpy.mockReturnValueOnce(10).mockReturnValueOnce(100);
 
-    nowSpy.mockReturnValueOnce(2);
-    stack.push(UndoStack.propEdit(obj, 'b', 0, 2));
-
-    nowSpy.mockReturnValueOnce(3);
-    stack.push({
-      undo: () => { obj.c = 0; },
-      redo: () => { obj.c = 3; },
-    });
+    stack.push(first);
+    stack.push(second);
 
     expect(stack.canUndo()).toBe(true);
-    expect(stack.undo()).toBe(true);
-    expect(obj.c).toBe(0);
-    expect(stack.undo()).toBe(true);
-    expect(obj.b).toBe(0);
-    expect(stack.undo()).toBe(false);
+    expect(stack.canRedo()).toBe(false);
+    expect(stack._past).toHaveLength(1);
+    expect(stack._past[0]).toBe(first);
+    expect(stack._past[0].redo).toBe(second.redo);
   });
 
-  it('swallows undo/redo exceptions, warns, and still moves commands between stacks', () => {
-    const stack = new UndoStack();
-    const cmd = {
-      undo: () => { throw new Error('boom undo'); },
-      redo: () => { throw new Error('boom redo'); },
-    };
+  it('does not coalesce when the key differs or the window elapsed', () => {
+    const stack = new UndoStack({ coalesceMs: 50 });
+    const first = { undo: vi.fn(), redo: vi.fn(), coalesceKey: 'one' };
+    const differentKey = { undo: vi.fn(), redo: vi.fn(), coalesceKey: 'two' };
+    const late = { undo: vi.fn(), redo: vi.fn(), coalesceKey: 'one' };
 
+    nowSpy.mockReturnValueOnce(0).mockReturnValueOnce(10).mockReturnValueOnce(100);
+
+    stack.push(first);
+    stack.push(differentKey);
+    stack.push(late);
+
+    expect(stack._past).toHaveLength(3);
+    expect(stack._past[0]).toBe(first);
+    expect(stack._past[1]).toBe(differentKey);
+    expect(stack._past[2]).toBe(late);
+  });
+
+  it('evicts the oldest command when the limit is exceeded', () => {
+    const stack = new UndoStack({ limit: 2 });
     nowSpy.mockReturnValue(1);
+
+    const cmds = [0, 1, 2].map(i => ({ undo: vi.fn(), redo: vi.fn(), label: `c${i}` }));
+    cmds.forEach(cmd => stack.push(cmd));
+
+    expect(stack._past).toHaveLength(2);
+    expect(stack._past.map(c => c.label)).toEqual(['c1', 'c2']);
+  });
+
+  it('undo and redo run commands, move between stacks, and respect boundaries', () => {
+    const stack = new UndoStack();
+    const cmd = { undo: vi.fn(), redo: vi.fn() };
+    nowSpy.mockReturnValue(1);
+
+    stack.push(cmd);
+
+    expect(stack.canUndo()).toBe(true);
+    expect(stack.canRedo()).toBe(false);
+    expect(stack.undo()).toBe(true);
+    expect(cmd.undo).toHaveBeenCalledTimes(1);
+    expect(stack.canUndo()).toBe(false);
+    expect(stack.canRedo()).toBe(true);
+    expect(stack.redo()).toBe(true);
+    expect(cmd.redo).toHaveBeenCalledTimes(1);
+    expect(stack.canUndo()).toBe(true);
+    expect(stack.canRedo()).toBe(false);
+    expect(stack.undo()).toBe(true);
+    expect(stack.undo()).toBe(false);
+    expect(stack.redo()).toBe(true);
+    expect(stack.redo()).toBe(false);
+  });
+
+  it('swallows thrown undo and redo errors while preserving history moves', () => {
+    const stack = new UndoStack();
+    const cmd = { undo: vi.fn(() => { throw new Error('undo fail'); }), redo: vi.fn(() => { throw new Error('redo fail'); }) };
+    nowSpy.mockReturnValue(1);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
     stack.push(cmd);
 
     expect(stack.undo()).toBe(true);
-    expect(console.warn).toHaveBeenCalledWith('[undo] failed:', expect.any(Error));
     expect(stack.canRedo()).toBe(true);
-
     expect(stack.redo()).toBe(true);
-    expect(console.warn).toHaveBeenCalledWith('[redo] failed:', expect.any(Error));
     expect(stack.canUndo()).toBe(true);
+    expect(warnSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('supports listeners, clear, and nestedPropEdit guards', () => {
+  it('clear empties both stacks and emits clear', () => {
     const stack = new UndoStack();
-    const calls = [];
-    const throwing = vi.fn(() => { throw new Error('listener'); });
-    const listener = vi.fn((s, reason) => calls.push([s, reason]));
-    const unsub = stack.on(listener);
-    stack.on(throwing);
+    const reasons = [];
+    stack.on((s, reason) => reasons.push(reason));
+    nowSpy.mockReturnValue(1);
 
-    nowSpy.mockReturnValueOnce(1);
-    stack.push(UndoStack.nestedPropEdit({ name: 'obj', position: { x: 1 } }, 'position', 'x', 1, 2));
-    expect(listener).toHaveBeenCalledWith(stack, 'push');
-    expect(throwing).toHaveBeenCalled();
-
-    const holder = { name: 'holder', position: null };
-    const nested = UndoStack.nestedPropEdit(holder, 'position', 'x', 1, 2);
-    nested.undo();
-    nested.redo();
-    expect(holder.position).toBeNull();
-
-    unsub();
+    stack.push({ undo: vi.fn(), redo: vi.fn() });
+    stack.undo();
     stack.clear();
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(calls.map(([, reason]) => reason)).toEqual(['push']);
+
     expect(stack.canUndo()).toBe(false);
     expect(stack.canRedo()).toBe(false);
+    expect(reasons).toEqual(['push', 'undo', 'clear']);
+  });
+
+  it('supports unsubscribe and swallows listener exceptions', () => {
+    const stack = new UndoStack();
+    const hits = [];
+    const listener = vi.fn((s, reason) => hits.push(reason));
+    const bad = vi.fn(() => { throw new Error('listener'); });
+    const unsubscribe = stack.on(listener);
+    stack.on(bad);
+    nowSpy.mockReturnValue(1);
+
+    stack.push({ undo: vi.fn(), redo: vi.fn() });
+    unsubscribe();
+    stack.clear();
+
+    expect(hits).toEqual(['push']);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(bad).toHaveBeenCalledTimes(2);
+  });
+
+  it('builds propEdit and nestedPropEdit commands with objKey coalescing', () => {
+    const a = { name: 'Cube', value: 1, position: { x: 2 } };
+    const b = { name: 'Cube', value: 9 };
+    const flat = UndoStack.propEdit(a, 'value', 1, 2);
+    const sameNamed = UndoStack.propEdit(b, 'value', 9, 10);
+    const nested = UndoStack.nestedPropEdit(a, 'position', 'x', 2, 3);
+    const missing = UndoStack.nestedPropEdit({ name: 'Sphere' }, 'position', 'x', 0, 1);
+
+    expect(flat.label).toBe('edit value');
+    expect(flat.coalesceKey).toBe('prop:value:name:Cube');
+    expect(sameNamed.coalesceKey).toBe(flat.coalesceKey);
+
+    flat.undo();
+    expect(a.value).toBe(1);
+    flat.redo();
+    expect(a.value).toBe(2);
+
+    nested.undo();
+    expect(a.position.x).toBe(2);
+    nested.redo();
+    expect(a.position.x).toBe(3);
+
+    expect(() => missing.undo()).not.toThrow();
+    expect(() => missing.redo()).not.toThrow();
   });
 });

@@ -10,6 +10,7 @@
  */
 
 import { icons } from './icons.js';
+import { escapeHtml } from './utils.js';
 
 export class ContextMenu {
   constructor() {
@@ -237,8 +238,3 @@ function setOriginToPoint(obj, worldPoint) {
   obj.updateMatrixWorld(true);
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, ch => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;',
-  }[ch]));
-}

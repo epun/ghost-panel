@@ -1,96 +1,88 @@
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { PromptAnalytics } from '../prompt-analytics.js';
 
 describe('PromptAnalytics', () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T00:00:00.000Z'));
   });
 
-  it('records normalized prompts, aggregates counts, persists, and derives intents', () => {
-    const analytics = new PromptAnalytics({ telemetry: false });
-    const intent = { intents: [{ id: 'add.object' }, { id: 'set.color' }] };
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
-    analytics.record('  Add  CUBE ', intent, true);
+  it('normalizes prompts, counts success and failure, tracks first and last seen, and captures intents', () => {
+    const analytics = new PromptAnalytics({ telemetry: false });
+
+    analytics.record('Add  CUBE ', { intents: [{ id: 'create' }, { id: '3d.object' }] }, true);
+    vi.setSystemTime(new Date('2024-01-01T00:05:00.000Z'));
     analytics.record('add cube', { intents: [{ id: 'ignored' }] }, false);
 
-    const top = analytics.getTop(1);
-    expect(top).toHaveLength(1);
-    expect(top[0]).toMatchObject({
-      prompt: 'add cube',
-      intents: ['add.object', 'set.color'],
-      count: 2,
-      successes: 1,
-      failures: 1,
-    });
-    expect(top[0].firstSeen).toBeTruthy();
-    expect(top[0].lastSeen).toBeTruthy();
-    expect(localStorage.getItem('ghost-panel:prompt-analytics')).toContain('add cube');
-
-    const loaded = new PromptAnalytics({ telemetry: false });
-    expect(loaded.getTop(1)[0]).toMatchObject({
-      prompt: 'add cube',
-      count: 2,
-      successes: 1,
-      failures: 1,
-    });
+    const [entry] = analytics.getTop(1);
+    expect(entry.prompt).toBe('add cube');
+    expect(entry.count).toBe(2);
+    expect(entry.successes).toBe(1);
+    expect(entry.failures).toBe(1);
+    expect(entry.firstSeen).toBe('2024-01-01T00:00:00.000Z');
+    expect(entry.lastSeen).toBe('2024-01-01T00:05:00.000Z');
+    expect(entry.intents).toEqual(['create', '3d.object']);
   });
 
-  it('sorts top prompts and identifies unhandled prompts by count and success rate', () => {
+  it('sorts top prompts by count and slices the requested size', () => {
     const analytics = new PromptAnalytics({ telemetry: false });
+    analytics.record('a', {}, true);
+    analytics.record('b', {}, true);
+    analytics.record('b', {}, true);
+    analytics.record('c', {}, true);
+    analytics.record('c', {}, true);
+    analytics.record('c', {}, true);
 
-    analytics.record('alpha', null, false);
-    analytics.record('alpha', null, false);
-    analytics.record('beta', null, false);
-    analytics.record('beta', null, true);
-    analytics.record('beta', null, false);
-    analytics.record('gamma', null, true);
-    analytics.record('gamma', null, true);
-
-    expect(analytics.getTop(2).map(e => e.prompt)).toEqual(['beta', 'alpha']);
-    expect(analytics.getUnhandled(10, 2).map(e => e.prompt)).toEqual(['beta', 'alpha']);
-    expect(analytics.getUnhandled(10, 3)).toHaveLength(1);
-    expect(analytics.getUnhandled(10, 3)[0]).toMatchObject({
-      prompt: 'beta',
-      intents: [],
-      count: 3,
-      successes: 1,
-      failures: 2,
-    });
+    expect(analytics.getTop(2).map(e => e.prompt)).toEqual(['c', 'b']);
   });
 
-  it('summarizes totals, unique entries, top prompts, and unhandled prompts', () => {
+  it('filters unhandled prompts by count and success rate', () => {
     const analytics = new PromptAnalytics({ telemetry: false });
-    analytics.record('a', null, false);
-    analytics.record('a', null, false);
-    analytics.record('b', null, true);
-    analytics.record('c', null, false);
+    analytics.record('a', {}, false);
+    analytics.record('a', {}, false);
+    analytics.record('b', {}, true);
+    analytics.record('b', {}, false);
+    analytics.record('b', {}, false);
+    analytics.record('c', {}, false);
+
+    expect(analytics.getUnhandled(5, 2).map(e => e.prompt)).toEqual(['b', 'a']);
+  });
+
+  it('returns a summary shape and clears localStorage', () => {
+    const analytics = new PromptAnalytics({ telemetry: false });
+    analytics.record('a', {}, true);
+    analytics.record('b', {}, false);
+    analytics.record('b', {}, false);
 
     const summary = analytics.getSummary();
-    expect(summary.total).toBe(4);
-    expect(summary.unique).toBe(3);
-    expect(summary.top).toHaveLength(3);
-    expect(summary.unhandled.map(e => e.prompt)).toEqual(['a']);
-  });
-
-  it('clears memory and localStorage, and falls back to empty state on malformed JSON', () => {
-    localStorage.setItem('ghost-panel:prompt-analytics', 'not json');
-    const analytics = new PromptAnalytics({ telemetry: false });
-    expect(analytics.getSummary()).toEqual({
-      total: 0,
-      unique: 0,
-      top: [],
-      unhandled: [],
-    });
-
-    analytics.record('x', null, true);
-    expect(localStorage.getItem('ghost-panel:prompt-analytics')).toContain('x');
+    expect(summary.total).toBe(3);
+    expect(summary.unique).toBe(2);
+    expect(summary.top).toHaveLength(2);
+    expect(summary.unhandled).toHaveLength(1);
 
     analytics.clear();
+    expect(analytics.getSummary()).toEqual({ total: 0, unique: 0, top: [], unhandled: [] });
     expect(localStorage.getItem('ghost-panel:prompt-analytics')).toBeNull();
-    expect(analytics.getSummary()).toEqual({
-      total: 0,
-      unique: 0,
-      top: [],
-      unhandled: [],
-    });
+  });
+
+  it('persists and reloads data via localStorage', () => {
+    const first = new PromptAnalytics({ telemetry: false });
+    first.record('save me', {}, true);
+
+    const second = new PromptAnalytics({ telemetry: false });
+    expect(second.getTop(1)[0].prompt).toBe('save me');
+    expect(second.getTop(1)[0].count).toBe(1);
+  });
+
+  it('falls back to an empty store when localStorage is corrupt', () => {
+    localStorage.setItem('ghost-panel:prompt-analytics', '{not-json');
+    const analytics = new PromptAnalytics({ telemetry: false });
+    expect(analytics.getSummary()).toEqual({ total: 0, unique: 0, top: [], unhandled: [] });
   });
 });
