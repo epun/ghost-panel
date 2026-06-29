@@ -50,7 +50,7 @@ import {
   applyWorkflow, enableWorkflow, disableWorkflow,
   getActiveWorkflows, scanAndApply, listWorkflows,
 } from './workflows.js';
-import { getAvailableExporters, runExport, registerExporter } from './exports.js';
+import { getAvailableExporters, runExport, registerExporter, downloadBlob } from './exports.js';
 
 // ── Clipboard helpers (used by Cmd+C / Cmd+V in the keydown handler) ──
 // Returns a serializable snapshot of the object plus a "kind" tag so paste
@@ -315,12 +315,7 @@ export function createGhostPanel(opts = {}) {
   function downloadJSON(filename) {
     const data = toJSON();
     const name = filename || `ghost-panel-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.json`;
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = name;
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
+    return downloadBlob(JSON.stringify(data, null, 2), name, 'application/json');
   }
 
   function loadJSONFile() {
