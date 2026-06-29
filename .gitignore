@@ -10,9 +10,6 @@ coverage/
 # npm pack / publish artifacts
 *.tgz
 
-# Test coverage output
-coverage/
-
 # Large binary media (kept locally; host via GitHub Releases or external CDN if needed)
 *.mp4
 
