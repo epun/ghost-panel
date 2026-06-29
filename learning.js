@@ -20,6 +20,7 @@
 import { isDev } from './dev-mode.js';
 import { showToast } from './toast.js';
 import { icons } from './icons.js';
+import { escapeHtml } from './utils.js';
 
 const ENDPOINT = '/__ghost-panel/apply-fix';
 const STORAGE_KEY = 'ghost-panel:learning';
@@ -402,8 +403,3 @@ export function attachLearning(ui) {
   return store;
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, ch => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;',
-  }[ch]));
-}

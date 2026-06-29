@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { icons } from './icons.js';
 import { showToast } from './toast.js';
+import { clamp01, escapeHtml } from './utils.js';
 
 // ─── Factory registry ───────────────────────────────────────────────────
 // Each entry: { id, label, category, icon, build(opts) → Object3D }
@@ -216,7 +217,6 @@ const FACTORIES = [
       // SH basis function for direction-independent color.
       const SH_C0 = 0.28209479177387814;
       const sigmoid = (x) => 1 / (1 + Math.exp(-x));
-      const clamp01 = (x) => x < 0 ? 0 : x > 1 ? 1 : x;
 
       // Pick a point size that scales with the model so 1cm-cube and
       // 100m-scene both look reasonable. Guard hard against NaN bounding
@@ -810,12 +810,6 @@ export class AddObjectMenu {
   dispose() {
     this.element.remove();
   }
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────────
-function escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function pickFile(accept) {

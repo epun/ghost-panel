@@ -30,9 +30,9 @@ import { Folder } from './folder.js';
 import { positionPopoverNear } from './controls.js';
 import { icons } from './icons.js';
 import { confirmDialog, alertDialog, promptDialog } from './modal.js';
+import { clamp } from './utils.js';
 
 // ── Math ────────────────────────────────────────────────────────────────
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const lerp  = (a, b, t) => a + (b - a) * t;
 
 // ── Property-path helpers (used by Track.writeTo to drive bound values) ──

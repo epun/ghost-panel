@@ -5,6 +5,7 @@
  */
 
 import { icons } from './icons.js';
+import { clamp, clamp01 } from './utils.js';
 
 function row(labelText, tooltip) {
   const el = document.createElement('div');
@@ -134,8 +135,6 @@ export function createSlider(label, opts = {}) {
     return i < 0 ? 0 : s.length - i - 1;
   })();
   let current = clamp(parseFloat(value), min, max);
-
-  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
   function paint() {
     const t = (current - min) / (max - min || 1);
     const pct = Math.max(0, Math.min(1, t)) * 100;
@@ -736,7 +735,6 @@ export function createColor(label, opts = {}) {
 }
 
 // ── color math helpers ──
-function clamp01(x) { return Math.max(0, Math.min(1, x)); }
 function normalizeHex(c) {
   if (typeof c !== 'string') return '#ffffff';
   if (/^#[0-9a-fA-F]{3}$/.test(c)) {
