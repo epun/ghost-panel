@@ -4712,6 +4712,150 @@ const CSS = /* css */ `
 :root.dui-theme-light .dui-axis-y   { color: hsl(120 55% 32%); }
 :root.dui-theme-light .dui-axis-z   { color: hsl(210 90% 45%); }
 :root.dui-theme-light .dui-axis-rot { color: hsl(280 60% 50%); }
+
+/* ── Light-mode overrides for the remaining hard-coded-white controls ──
+   Same root cause as the block above: these controls (corner-radius,
+   dimensions, paired-number cells, the color picker popover, the dropdown /
+   combo / easing popovers, the animation graph editor's f-curve guides, and
+   the body-mounted add menu) paint their chrome, icons and surfaces with a
+   white scale tuned for the dark panel. Mirror them onto a dark-on-light
+   scale (or flip the floating glass surfaces to light glass like the modals
+   above) so the whole inspector reads as one light surface. Additive only. */
+
+/* Corner-radius widget */
+:root.dui-theme-light .dui-cr-field {
+  background: hsl(240 6% 10% / 0.04);
+  border-color: hsl(240 6% 10% / 0.1);
+}
+:root.dui-theme-light .dui-cr-field:hover { background: hsl(240 6% 10% / 0.07); }
+:root.dui-theme-light .dui-cr-field:focus-within {
+  background: hsl(240 6% 10% / 0.09);
+  border-color: hsl(240 6% 10% / 0.18);
+}
+:root.dui-theme-light .dui-cr-icon { color: hsl(240 4% 40%); }
+:root.dui-theme-light .dui-cr-toggle { color: hsl(240 5% 40%); }
+:root.dui-theme-light .dui-cr-toggle:hover { color: hsl(240 10% 12%); }
+
+/* Dimensions (W / H + aspect lock) */
+:root.dui-theme-light .dui-dim .dui-paired-icon { color: hsl(240 4% 40%); }
+:root.dui-theme-light .dui-dim-lock { color: hsl(240 5% 40%); }
+:root.dui-theme-light .dui-dim-lock:hover { color: hsl(240 10% 12%); }
+:root.dui-theme-light .dui-dim-lock.dui-active {
+  color: hsl(240 10% 12%);
+  border-color: hsl(240 6% 10% / 0.22);
+  background: hsl(240 6% 10% / 0.1);
+}
+
+/* Paired-number / typography cells */
+:root.dui-theme-light .dui-paired-cell {
+  background: hsl(240 6% 10% / 0.04);
+  border-color: hsl(240 6% 10% / 0.1);
+}
+:root.dui-theme-light .dui-paired-cell:hover { background: hsl(240 6% 10% / 0.07); }
+:root.dui-theme-light .dui-paired-cell:focus-within {
+  background: hsl(240 6% 10% / 0.09);
+  border-color: hsl(240 6% 10% / 0.18);
+}
+:root.dui-theme-light .dui-paired-icon { color: hsl(240 4% 40%); }
+:root.dui-theme-light .dui-paired-size .dui-paired-icon { color: hsl(240 6% 30%); }
+:root.dui-theme-light .dui-paired-chevron { color: hsl(240 4% 40%); }
+:root.dui-theme-light .dui-paired-chevron:hover {
+  color: hsl(240 10% 12%);
+  background: hsl(240 6% 10% / 0.06);
+}
+:root.dui-theme-light .dui-paired-combo.dui-combo-open .dui-paired-chevron {
+  color: hsl(240 10% 12%);
+  background: hsl(240 6% 10% / 0.08);
+}
+
+/* Color picker popover — flip the dark glass to light glass; the SV square,
+   hue strip and their pointers are intrinsically colorful so they're left. */
+:root.dui-theme-light .dui-color-popover {
+  background: hsl(0 0% 100% / 0.95);
+  border-color: hsl(240 6% 10% / 0.12);
+  color: hsl(240 10% 10%);
+  box-shadow: 0 1px 0 hsl(0 0% 100% / 0.6) inset, 0 18px 38px hsl(240 10% 10% / 0.22);
+}
+:root.dui-theme-light .dui-color-hex-row {
+  background: hsl(240 6% 10% / 0.05);
+  border-color: hsl(240 6% 10% / 0.1);
+}
+:root.dui-theme-light .dui-color-hex-prefix { color: hsl(240 5% 45%); }
+:root.dui-theme-light .dui-color-hex { color: hsl(240 10% 12%); }
+
+/* Dropdown / combo / easing popovers — shared dark glass → light glass.
+   (The select popover carries .dui-combo-popover too, so it's covered here.) */
+:root.dui-theme-light .dui-combo-popover,
+:root.dui-theme-light .dui-easing-popover {
+  background: hsl(0 0% 100% / 0.96);
+  border-color: hsl(240 6% 10% / 0.12);
+  box-shadow: 0 12px 32px hsl(240 10% 10% / 0.22);
+}
+:root.dui-theme-light .dui-combo-option,
+:root.dui-theme-light .dui-easing-option { color: hsl(240 10% 15%); }
+:root.dui-theme-light .dui-combo-option:hover,
+:root.dui-theme-light .dui-easing-option:hover { background: hsl(240 6% 10% / 0.07); }
+:root.dui-theme-light .dui-combo-option-sub { color: hsl(240 5% 45%); }
+:root.dui-theme-light .dui-easing-option-preview { color: hsl(240 5% 40%); }
+:root.dui-theme-light .dui-select-chevron { color: hsl(240 5% 45%); }
+:root.dui-theme-light .dui-select-option.dui-active {
+  background: hsl(240 6% 10% / 0.08);
+  color: hsl(240 10% 12%);
+}
+:root.dui-theme-light .dui-select-option.dui-active .dui-select-check { color: hsl(240 10% 12%); }
+
+/* Animation graph editor — chrome is already var-driven; only the SVG
+   f-curve grid / zero-line / tick labels hard-code white. */
+:root.dui-theme-light .dui-graph-grid line { stroke: hsl(240 6% 10% / 0.1); }
+:root.dui-theme-light .dui-graph-zero { stroke: hsl(240 6% 10% / 0.18); }
+:root.dui-theme-light .dui-graph-tick { fill: hsl(240 5% 40%); }
+
+/* Keyframe diamond (the per-row record button) */
+:root.dui-theme-light .dui-keyframe-icon { color: hsl(240 6% 10% / 0.3); }
+:root.dui-theme-light .dui-keyframe-icon:hover { color: hsl(240 6% 10% / 0.6); }
+:root.dui-theme-light .dui-keyframe-icon.dui-keyframe-has-track { color: hsl(240 10% 20%); }
+
+/* Add menu (Shift+A) — body-mounted dark glass → light glass. */
+:root.dui-theme-light .dui-add-menu {
+  background: hsl(0 0% 100% / 0.95);
+  border-color: hsl(240 6% 10% / 0.12);
+  color: hsl(240 10% 10%);
+  box-shadow: 0 1px 0 hsl(0 0% 100% / 0.6) inset, 0 16px 48px hsl(240 10% 10% / 0.22);
+}
+:root.dui-theme-light .dui-add-menu-header { border-bottom-color: hsl(240 6% 10% / 0.08); }
+:root.dui-theme-light .dui-add-menu-search {
+  background: hsl(240 6% 10% / 0.05);
+  border-color: hsl(240 6% 10% / 0.12);
+  color: hsl(240 10% 10%);
+}
+:root.dui-theme-light .dui-add-menu-search:focus {
+  border-color: hsl(240 6% 10% / 0.3);
+  box-shadow: 0 0 0 3px hsl(240 6% 10% / 0.06);
+}
+:root.dui-theme-light .dui-add-menu-search::placeholder { color: hsl(240 5% 45%); }
+:root.dui-theme-light .dui-add-menu-group { color: hsl(240 5% 45%); }
+:root.dui-theme-light .dui-add-menu-empty-title { color: hsl(240 10% 20%); }
+:root.dui-theme-light .dui-add-menu-empty-hint { color: hsl(240 5% 45%); }
+:root.dui-theme-light .dui-add-menu-empty-hint code {
+  background: hsl(240 6% 10% / 0.06);
+  color: hsl(240 8% 30%);
+}
+:root.dui-theme-light .dui-add-menu-item { color: hsl(240 10% 12%); }
+:root.dui-theme-light .dui-add-menu-item.dui-active { background: hsl(240 6% 10% / 0.08); }
+:root.dui-theme-light .dui-add-menu-item:hover { background: hsl(240 6% 10% / 0.06); }
+:root.dui-theme-light .dui-add-menu-icon { background: hsl(240 6% 10% / 0.06); }
+:root.dui-theme-light .dui-add-menu-tag {
+  color: hsl(240 5% 40%);
+  background: hsl(240 6% 10% / 0.08);
+}
+:root.dui-theme-light .dui-add-menu-footer {
+  border-top-color: hsl(240 6% 10% / 0.08);
+  color: hsl(240 5% 45%);
+}
+:root.dui-theme-light .dui-add-menu-footer kbd {
+  background: hsl(240 6% 10% / 0.06);
+  border-color: hsl(240 6% 10% / 0.12);
+}
 `;
 
 let injected = false;
