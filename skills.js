@@ -1,3 +1,4 @@
+import { log } from './log.js';
 /**
  * Skills — declarative, composable units of UI + behavior.
  *
@@ -199,13 +200,13 @@ export class SkillsRegistry {
     try {
       const saved = JSON.parse(localStorage.getItem(key) || '{}');
       for (const [id, val] of Object.entries(saved)) this.usage.set(id, val);
-    } catch {}
+    } catch (e) { log.warn('skills', 'localStorage load failed:', e); }
     this.on('change', () => {
       try {
         const obj = {};
         this.usage.forEach((v, k) => { obj[k] = v; });
         localStorage.setItem(key, JSON.stringify(obj));
-      } catch {}
+      } catch (e) { log.warn('skills', 'localStorage save failed:', e); }
     });
   }
 }

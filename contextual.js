@@ -20,6 +20,7 @@ import { attachKeyframeIcon } from './keyframe-icon.js';
 import { showToast } from './toast.js';
 import { positionPopoverNear } from './controls.js';
 import { icons } from './icons.js';
+import { log } from './log.js';
 
 // Materials that have a `.map` slot Three.js samples in their fragment shader.
 // Anything outside this set will be auto-promoted when the user uploads a
@@ -905,7 +906,7 @@ export function attachContextualInspector(ui, opts = {}) {
     const endDrag = (e) => {
       if (!dragging) return;
       dragging = false;
-      try { inp.releasePointerCapture(e.pointerId); } catch {}
+      try { inp.releasePointerCapture(e.pointerId); } catch (e) { log.debug('contextual', 'releasePointerCapture failed:', e); }
       inp.classList.remove('dui-context-num-drag');
     };
     inp.addEventListener('pointerup', endDrag);
@@ -1148,7 +1149,7 @@ export function attachContextualInspector(ui, opts = {}) {
       thumb.width = 64; thumb.height = 64;
       const img = mat.map.image;
       if (img) {
-        try { thumb.getContext('2d').drawImage(img, 0, 0, 64, 64); } catch {}
+        try { thumb.getContext('2d').drawImage(img, 0, 0, 64, 64); } catch (e) { log.debug('contextual', 'drawImage failed:', e); }
       }
       thumb.title = 'Replace texture';
       thumb.addEventListener('click', pickAndUpload);

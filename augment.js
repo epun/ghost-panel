@@ -24,6 +24,7 @@
 // ── Property scanner ────────────────────────────────────────────────────────
 
 import { PromptAnalytics } from './prompt-analytics.js';
+import { log } from './log.js';
 
 /**
  * Walk an object's own + prototype properties and return candidates for
@@ -507,7 +508,7 @@ function cssColorToHex(input) {
         return '#' + [r, g, b].map(n => (n || 0).toString(16).padStart(2, '0')).join('');
       }
     }
-  } catch {}
+  } catch (e) { log.debug('augment', 'color parse failed:', e); }
   return '#ffffff';
 }
 
@@ -639,7 +640,7 @@ export function applyRecipe(ui, recipes, { source = 'user' } = {}) {
           folder[ctrl.method](ctrl.label, ctrl.opts ?? {});
         }
       } catch (e) {
-        console.warn(`[Ghost Panel] Could not add control "${ctrl.label}":`, e);
+        log.warn('augment', `Could not add control "${ctrl.label}":`, e);
       }
     }
     added.push({ folder, recipe });
@@ -843,7 +844,7 @@ export class AugmentEngine {
       const list = typeof p === 'function' ? p(obj) : p;
       return Array.isArray(list) ? list.filter(d => d && d.name) : [];
     } catch (e) {
-      console.warn('[Ghost Panel] augmentProperties threw:', e);
+      log.warn('augment', 'augmentProperties threw:', e);
       return [];
     }
   }
@@ -1091,7 +1092,7 @@ export class AugmentEngine {
         });
       }
     } catch (e) {
-      console.warn('[Ghost Panel] Could not add property control:', e);
+      log.warn('augment', 'Could not add property control:', e);
       return null;
     }
 
@@ -1289,7 +1290,7 @@ export class AugmentEngine {
   _copyCode() {
     navigator.clipboard?.writeText(this._lastCode)
       .then(() => this._showToast('Code copied to clipboard'))
-      .catch(() => console.info('[Ghost Panel] Generated code:\n' + this._lastCode));
+      .catch((e) => { log.debug('augment', 'generated code confirm failed:', e); log.info('augment', 'Generated code:\n' + this._lastCode); });
   }
 
   _showToast(message, action = null) {

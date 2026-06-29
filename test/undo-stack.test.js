@@ -1,5 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { UndoStack } from '../undo-stack.js';
+import { log } from '../log.js';
 
 describe('UndoStack', () => {
   let nowSpy;
@@ -11,6 +12,8 @@ describe('UndoStack', () => {
   afterEach(() => {
     nowSpy?.mockRestore();
     vi.restoreAllMocks();
+    log.setLevel('info');
+    log.setOnError(null);
   });
 
   it('rejects invalid commands', () => {
@@ -120,7 +123,8 @@ describe('UndoStack', () => {
     const stack = new UndoStack();
     const cmd = { undo: vi.fn(() => { throw new Error('undo fail'); }), redo: vi.fn(() => { throw new Error('redo fail'); }) };
     nowSpy.mockReturnValue(1);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    log.setLevel('debug');
 
     stack.push(cmd);
 
@@ -128,7 +132,7 @@ describe('UndoStack', () => {
     expect(stack.canRedo()).toBe(true);
     expect(stack.redo()).toBe(true);
     expect(stack.canUndo()).toBe(true);
-    expect(warnSpy).toHaveBeenCalledTimes(2);
+    expect(debugSpy).toHaveBeenCalledTimes(2);
   });
 
   it('clear empties both stacks and emits clear', () => {

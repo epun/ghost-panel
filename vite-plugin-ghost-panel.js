@@ -18,6 +18,7 @@
  */
 import { readFile, writeFile, appendFile } from 'node:fs/promises';
 import { resolve, isAbsolute } from 'node:path';
+import { log } from './log.js';
 
 const LOG_PATH       = '.ghost-panel-fixes.log';
 const ANALYTICS_PATH = '.ghost-panel-analytics.ndjson';
@@ -40,7 +41,7 @@ export function ghostPanelPlugin(opts = {}) {
         catch { return send(res, 400, { error: 'invalid JSON' }); }
 
         const line = JSON.stringify({ ...payload, _serverTs: new Date().toISOString() }) + '\n';
-        try { await appendFile(resolve(root, ANALYTICS_PATH), line); } catch {}
+        try { await appendFile(resolve(root, ANALYTICS_PATH), line); } catch (e) { log.warn('vite-plugin', 'analytics append failed:', e); }
         send(res, 200, { ok: true });
       });
 
@@ -64,7 +65,7 @@ export function ghostPanelPlugin(opts = {}) {
             e.count     += count ?? 1;
             e.successes += successes ?? (count ?? 1);
             counts[prompt] = e;
-          } catch {}
+          } catch (e) { log.debug('vite-plugin', 'analytics parse failed:', e); }
         }
 
         const sorted = Object.values(counts)
@@ -113,7 +114,7 @@ export function ghostPanelPlugin(opts = {}) {
         const patched = source.replace(find, replace);
         await writeFile(target, patched, 'utf8');
         const entry = `[${new Date().toISOString()}] ${file}\n  reason: ${reason || '(none)'}\n`;
-        try { await appendFile(resolve(root, LOG_PATH), entry); } catch {}
+        try { await appendFile(resolve(root, LOG_PATH), entry); } catch (e) { log.warn('vite-plugin', 'audit append failed:', e); }
         send(res, 200, { ok: true, file, bytesWritten: patched.length });
       });
     },

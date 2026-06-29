@@ -24,6 +24,7 @@
  *   sync external state (sliders, JSON saves, etc.).
  */
 import * as THREE from 'three';
+import { log } from './log.js';
 
 // ── Color palette ──
 // Standard RGB-axis convention: X=red, Y=green, Z=blue. Blender uses the same.
@@ -384,7 +385,7 @@ export function createGizmoSystem(scene, camera, renderer, orbitControls) {
     detach();
     const factory = FACTORIES[type];
     if (!factory) {
-      console.warn(`[gizmos] Unknown type "${type}". Available: ${list().join(', ')}`);
+      log.warn('gizmos', `Unknown type "${type}". Available: ${list().join(', ')}`);
       return null;
     }
     const mesh = factory();

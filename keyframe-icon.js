@@ -1,3 +1,4 @@
+import { log } from './log.js';
 /**
  * Blender-style keyframe icon — a tiny diamond appended next to any property
  * control. Clicking it inserts a keyframe for that property at the current
@@ -20,7 +21,7 @@ let _rafId = null;
 function ensureTickLoop() {
   if (_rafId) return;
   const tick = () => {
-    TICKERS.forEach(fn => { try { fn(); } catch {} });
+    TICKERS.forEach(fn => { try { fn(); } catch (e) { log.debug('keyframe-icon', 'ticker failed:', e); } });
     _rafId = requestAnimationFrame(tick);
   };
   _rafId = requestAnimationFrame(tick);

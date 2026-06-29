@@ -1,3 +1,4 @@
+import { log } from './log.js';
 /**
  * Ghost Panel · Prompt Analytics
  *
@@ -110,7 +111,7 @@ export class PromptAnalytics {
   /** Wipe all stored analytics. */
   clear() {
     this._data = {};
-    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { log.warn('prompt-analytics', 'localStorage remove failed:', e); }
   }
 
   // ── Internals ──────────────────────────────────────────────────────────────
@@ -122,7 +123,8 @@ export class PromptAnalytics {
   _load() {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
-    } catch {
+    } catch (e) {
+      log.warn('prompt-analytics', 'localStorage load failed:', e);
       return {};
     }
   }
@@ -134,7 +136,7 @@ export class PromptAnalytics {
       .slice(0, MAX_ENTRIES);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(trimmed)));
-    } catch {}
+    } catch (e) { log.warn('prompt-analytics', 'localStorage save failed:', e); }
   }
 
   _detectDev() {

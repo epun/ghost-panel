@@ -26,6 +26,7 @@
 import { injectStyles } from './styles.js';
 import { initTooltips } from './tooltip.js';
 import { Panel, applyGlobalTheme } from './panel.js';
+import { log } from './log.js';
 import {
   SceneObjectManager, addSceneObjectsFolder, addCameraFolder, autoRegisterScene,
 } from './three-extensions.js';
@@ -205,6 +206,8 @@ export function createGhostPanel(opts = {}) {
     workflow,                      // '3d' | 'animation' | 'shader' | 'ascii' | '2d' | 'audio' | 'auto' | null
     workflowOpts = {},             // options forwarded to the workflow setup function
     workflowPicker = true,         // show a workflow dropdown at the top of the main panel
+    logLevel,                      // logger verbosity ('silent' | 'error' | 'warn' | 'info' | 'debug')
+    onError,                       // optional hook fired for error-level logs and boundary failures
     // Three.js mode (optional)
     scene, camera, renderer, controls,
     // Built-in TransformControls gizmo controls (Three.js mode):
@@ -222,6 +225,9 @@ export function createGhostPanel(opts = {}) {
     scenePanel = true,
     scenePanelTitle = 'Scene',
   } = opts;
+
+  if (logLevel != null) log.setLevel(logLevel);
+  if (onError != null) log.setOnError(onError);
 
   injectStyles();
   initTooltips();
@@ -293,15 +299,27 @@ export function createGhostPanel(opts = {}) {
   // the user has no row to host the "look through this camera" focus
   // button for their primary viewpoint.
   if (objectManager && camera) {
-    queueMicrotask(() => registerMainCameraIfMissing(objectManager, camera));
-    requestAnimationFrame(() => registerMainCameraIfMissing(objectManager, camera));
+    queueMicrotask(() => {
+      try { registerMainCameraIfMissing(objectManager, camera); }
+      catch (e) { log.error('index', 'registerMainCameraIfMissing failed:', e); }
+    });
+    requestAnimationFrame(() => {
+      try { registerMainCameraIfMissing(objectManager, camera); }
+      catch (e) { log.error('index', 'registerMainCameraIfMissing failed:', e); }
+    });
   }
   // Zero-config full-scene scan: walk the scene and surface its meshes /
   // lights / cameras automatically. Manually-registered nodes take
   // priority — autoRegisterScene skips them.
   if (scene && objectManager && opts.autoRegister !== false) {
-    queueMicrotask(() => autoRegisterScene(objectManager, scene));
-    requestAnimationFrame(() => autoRegisterScene(objectManager, scene));
+    queueMicrotask(() => {
+      try { autoRegisterScene(objectManager, scene); }
+      catch (e) { log.error('index', 'autoRegisterScene failed:', e); }
+    });
+    requestAnimationFrame(() => {
+      try { autoRegisterScene(objectManager, scene); }
+      catch (e) { log.error('index', 'autoRegisterScene failed:', e); }
+    });
   }
 
   // Contextual inspector — gets wired up *after* the UI handle exists so
@@ -330,7 +348,7 @@ export function createGhostPanel(opts = {}) {
           const data = JSON.parse(reader.result);
           fromJSON(data);
         } catch (err) {
-          console.error('[Ghost Panel] Failed to parse JSON:', err);
+          log.error('index', 'Failed to parse JSON:', err);
         }
       };
       reader.readAsText(file);
@@ -574,30 +592,34 @@ export function createGhostPanel(opts = {}) {
 
   // ── Run detection now, then keep watching ──
   function detectAndSync() {
-    // Pass the object manager into detectWorkflows so it can sniff
-    // animation arrays the host parked on entry metadata (Brick Phone
-    // Landing's `{ group, gltf }` shape is one example — the gltf
-    // animations don't live anywhere reachable via scene.traverse).
-    if (!useAutoDetect) return;
-    const detected = detectWorkflows({
-      ...opts,
-      // Pass the user's host-side object manager (separate from
-      // Ghost Panel's internal manager) AND Ghost Panel's own so animations
-      // stored on either layer's entries can be discovered.
-      objectManager: opts.objectManager || objectManager,
-    });
-    // Enable newly-detected workflows
-    detected.forEach(name => {
-      if (!ui._activeWorkflows?.has(name)) enableWorkflow(ui, name, workflowOpts);
-    });
-    // Disable workflows that are no longer detected (only the ones WE enabled)
-    [...(ui._activeWorkflows || [])].forEach(name => {
-      if (!detected.includes(name) && ui._autoEnabled?.has(name)) {
-        disableWorkflow(ui, name);
-      }
-    });
-    ui._autoEnabled = new Set(detected);
-    syncStatus();
+    try {
+      // Pass the object manager into detectWorkflows so it can sniff
+      // animation arrays the host parked on entry metadata (Brick Phone
+      // Landing's `{ group, gltf }` shape is one example — the gltf
+      // animations don't live anywhere reachable via scene.traverse).
+      if (!useAutoDetect) return;
+      const detected = detectWorkflows({
+        ...opts,
+        // Pass the user's host-side object manager (separate from
+        // Ghost Panel's internal manager) AND Ghost Panel's own so animations
+        // stored on either layer's entries can be discovered.
+        objectManager: opts.objectManager || objectManager,
+      });
+      // Enable newly-detected workflows
+      detected.forEach(name => {
+        if (!ui._activeWorkflows?.has(name)) enableWorkflow(ui, name, workflowOpts);
+      });
+      // Disable workflows that are no longer detected (only the ones WE enabled)
+      [...(ui._activeWorkflows || [])].forEach(name => {
+        if (!detected.includes(name) && ui._autoEnabled?.has(name)) {
+          disableWorkflow(ui, name);
+        }
+      });
+      ui._autoEnabled = new Set(detected);
+      syncStatus();
+    } catch (e) {
+      log.error('index', 'detectAndSync failed:', e);
+    }
   }
 
   // Initial scan
@@ -894,7 +916,7 @@ export function createGhostPanel(opts = {}) {
   // settled, and getBoundingClientRect() returns accurate values for the
   // DOM auto-registration path in scanAndRegister.
   requestAnimationFrame(() => {
-    try { scanAndRegister(ui); } catch (e) { console.warn('[Ghost Panel] scanProject failed:', e); }
+    try { scanAndRegister(ui); } catch (e) { log.error('index', 'scanProject failed:', e); }
   });
 
   // ── Skills API — exposes a declarative catalog of capabilities ──
@@ -1008,14 +1030,18 @@ export function createGhostPanel(opts = {}) {
     if (!useAutoDetect || _detectQueued) return;
     _detectQueued = true;
     queueMicrotask(() => {
-      _detectQueued = false;
-      detectAndSync();
-      // Also re-run the scene scan so descendants of a newly-registered
-      // group (e.g. children of a freshly-loaded GLTF) surface in the
-      // outliner. autoRegisterScene is idempotent — it skips entries
-      // that already exist in the manager.
-      if (scene && objectManager && opts.autoRegister !== false) {
-        autoRegisterScene(objectManager, scene);
+      try {
+        _detectQueued = false;
+        detectAndSync();
+        // Also re-run the scene scan so descendants of a newly-registered
+        // group (e.g. children of a freshly-loaded GLTF) surface in the
+        // outliner. autoRegisterScene is idempotent — it skips entries
+        // that already exist in the manager.
+        if (scene && objectManager && opts.autoRegister !== false) {
+          autoRegisterScene(objectManager, scene);
+        }
+      } catch (e) {
+        log.error('index', 'detectSoon failed:', e);
       }
     });
   }
@@ -1033,9 +1059,13 @@ export function createGhostPanel(opts = {}) {
   // types. Skipped when the event-driven path can't run.
   if (useAutoDetect && opts.scene) {
     ui._watchInterval = setInterval(() => {
-      detectAndSync();
-      if (scene && objectManager && opts.autoRegister !== false) {
-        autoRegisterScene(objectManager, scene);
+      try {
+        detectAndSync();
+        if (scene && objectManager && opts.autoRegister !== false) {
+          autoRegisterScene(objectManager, scene);
+        }
+      } catch (e) {
+        log.error('index', 'watch interval failed:', e);
       }
     }, 1000);
   }

@@ -23,6 +23,7 @@
  */
 
 import { icons } from './icons.js';
+import { log } from './log.js';
 
 let host = null;
 function ensureHost() {
@@ -82,7 +83,7 @@ function teardown(backdrop, prevFocus) {
   setTimeout(() => backdrop.remove(), 160);
   // a11y: return focus to the element that opened the dialog (the trigger).
   if (prevFocus && typeof prevFocus.focus === 'function') {
-    try { prevFocus.focus(); } catch {}
+    try { prevFocus.focus(); } catch (e) { log.debug('modal', 'focus failed:', e); }
   }
 }
 

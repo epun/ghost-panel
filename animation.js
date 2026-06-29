@@ -31,6 +31,7 @@ import { positionPopoverNear } from './controls.js';
 import { icons } from './icons.js';
 import { confirmDialog, alertDialog, promptDialog } from './modal.js';
 import { clamp } from './utils.js';
+import { log } from './log.js';
 
 // ── Math ────────────────────────────────────────────────────────────────
 const lerp  = (a, b, t) => a + (b - a) * t;
@@ -780,7 +781,7 @@ export function createGraphEditor(opts = {}) {
     });
     dotEl.addEventListener('pointerup', (e) => {
       dragging = false;
-      try { dotEl.releasePointerCapture(e.pointerId); } catch {}
+      try { dotEl.releasePointerCapture(e.pointerId); } catch (e) { log.debug('animation', 'releasePointerCapture failed:', e); }
     });
     // Double-click to delete
     dotEl.addEventListener('dblclick', (e) => {
