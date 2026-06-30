@@ -21,6 +21,20 @@ Most inspector panels ask you to declare what controls should exist. Ghost Panel
 
 ---
 
+## Live demos
+
+Each one boots Ghost Panel against a different host:
+
+| | Demo | What it shows |
+|---|---|---|
+| **Charms** | [**Charm Chaos**](https://charmchaos.ghostpanel.design) | Keychain Studio — charms and keychains in WebGL, inspected live with Ghost Panel. *(hosted)* |
+| **3D** | [Three.js scene](./ghost-panel-demo.html) | Cube · Sphere · TorusKnot · POV camera. Material folder mounts on selection. |
+| **2D** | [Canvas 2D](./ghost-panel-2d-demo.html) | Bound circles driving Canvas2D via the F-Curve graph editor. |
+| **Web** | [DOM adapters](./ghost-panel-web-demo.html) | Card · pill · CTA — plain HTML inspected like meshes. |
+| **Grid** | [Infinite canvas](./ghost-panel-grid-demo.html) | 625-cell CSS-perspective fly-through with depth fade and a poster gallery. |
+
+---
+
 ## Install
 
 ```bash
