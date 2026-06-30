@@ -9,6 +9,7 @@ import { getAvailableExporters, runExport } from './exports.js';
 import { icons } from './icons.js';
 import { alertDialog } from './modal.js';
 import { scanProject } from './project-scanner.js';
+import { log } from './log.js';
 
 export class ExportMenu {
   constructor(ui) {
@@ -77,7 +78,7 @@ export class ExportMenu {
       // 'animation' is implied if there's a graph editor — the host
       // wires that through opts.tracks at init, so it's already in
       // activeWorkflows if relevant.
-    } catch {}
+    } catch (e) { log.warn('export-menu', 'scanProject failed:', e); }
     const effective = [...active];
     const items = getAvailableExporters(effective);
 
@@ -150,7 +151,7 @@ export class ExportMenu {
             await runExport(this.ui, exp.id);
           }
         } catch (err) {
-          console.error('[Ghost Panel] Export failed:', err);
+          log.error('export-menu', 'Export failed:', err);
           await alertDialog(err?.message || String(err), {
             title: 'Export failed', icon: icons.warning,
           });

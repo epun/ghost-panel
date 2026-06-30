@@ -1,3 +1,4 @@
+import { log } from './log.js';
 /**
  * Dev-mode detection. Returns false when the host is plausibly a production
  * build, so debug-only surfaces (the demo switcher, debug overlays, etc.)
@@ -32,12 +33,12 @@ export function isDev() {
   // eliminated in the final bundle.
   try {
     if (import.meta?.env?.PROD === true) return false;
-  } catch {}
+  } catch (e) { log.warn('dev-mode', 'probe failed:', e); }
   // Webpack / Node / CRA style.
   try {
     if (typeof process !== 'undefined'
         && process.env?.NODE_ENV === 'production') return false;
-  } catch {}
+  } catch (e) { log.warn('dev-mode', 'probe failed:', e); }
   return true;
 }
 
@@ -49,5 +50,5 @@ export function isDev() {
  */
 export function initIfDev(fn) {
   if (!isDev()) return null;
-  try { return fn(); } catch (e) { console.warn('[Ghost Panel] init failed:', e); return null; }
+  try { return fn(); } catch (e) { log.warn('dev-mode', 'init failed:', e); return null; }
 }

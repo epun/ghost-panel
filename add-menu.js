@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { icons } from './icons.js';
 import { showToast } from './toast.js';
 import { clamp01, escapeHtml } from './utils.js';
+import { log } from './log.js';
 
 // ─── Factory registry ───────────────────────────────────────────────────
 // Each entry: { id, label, category, icon, build(opts) → Object3D }
@@ -278,7 +279,7 @@ const FACTORIES = [
             geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
             usingVertexColors = true;
             // eslint-disable-next-line no-console
-            console.info('[Ghost Panel] decoded Gaussian-splat colors from SH DC coefficients (', n, 'points)');
+            log.info('add-menu', 'decoded Gaussian-splat colors from SH DC coefficients (', n, 'points)');
           } else if (hasStdColor) {
             usingVertexColors = true;
           } else {
@@ -300,7 +301,7 @@ const FACTORIES = [
               geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
               usingVertexColors = true;
               // eslint-disable-next-line no-console
-              console.info('[Ghost Panel] PLY has no color attribute; generated position-based palette');
+              log.info('add-menu', 'PLY has no color attribute; generated position-based palette');
             }
           }
 
@@ -375,7 +376,7 @@ const FACTORIES = [
       points.userData.splatKind = 'splat-binary';
       points.userData.splatPointCount = n;
       // eslint-disable-next-line no-console
-      console.info('[Ghost Panel] parsed', n, 'splat records from', file.name);
+      log.info('add-menu', 'parsed', n, 'splat records from', file.name);
       return points;
     },
   },
@@ -491,10 +492,10 @@ export class AddObjectMenu {
       if (allowFullScan && ui?._scene && ui?.objectManager?.registerCamera) {
         import('./three-extensions.js').then(({ autoRegisterScene }) => {
           autoRegisterScene(ui.objectManager, ui._scene);
-        }).catch(() => {});
+        }).catch((e) => { log.debug('add-menu', 'auto-register failed:', e); });
       }
       ui?.rescan?.();
-    } catch {}
+    } catch (e) { log.warn('add-menu', 'refresh failed:', e); }
     this.element.classList.add('dui-visible');
     this.searchInput.value = '';
     this._selected = 0;
@@ -680,7 +681,7 @@ export class AddObjectMenu {
         // Surface the error as a toast so the user knows something went
         // wrong (otherwise the click + file pick produces nothing — easy
         // to think the menu is broken). Re-throw to the console for diag.
-        console.error(`[Ghost Panel] ${factory.label || factory.id} build failed:`, err);
+        log.error('add-menu', `${factory.label || factory.id} build failed:`, err);
         showToast(`${factory.label || factory.id}: ${err?.message || 'failed'}`, { kind: 'error' });
         return;
       }
@@ -706,7 +707,7 @@ export class AddObjectMenu {
       // to be omitted here, but the splat factory needs it for the host
       // loader override path — pass it consistently with the non-3D
       // branch above.
-      console.error(`[Ghost Panel] ${factory.label || factory.id} build failed:`, err);
+      log.error('add-menu', `${factory.label || factory.id} build failed:`, err);
       showToast(`${factory.label || factory.id}: ${err?.message || 'failed'}`, { kind: 'error' });
       return;
     }
@@ -716,7 +717,7 @@ export class AddObjectMenu {
     // Position at world origin by default; users can move via gizmo / G key
     const scene = this.ui._scene;
     if (!scene) {
-      console.warn('[Ghost Panel] No scene available to add to');
+      log.warn('add-menu', 'No scene available to add to');
       return;
     }
     scene.add(obj);
@@ -775,7 +776,7 @@ export class AddObjectMenu {
       camera.updateProjectionMatrix();
       controls?.update?.();
     } catch (e) {
-      console.warn('[Ghost Panel] auto-frame failed:', e);
+      log.warn('add-menu', 'auto-frame failed:', e);
     }
   }
 

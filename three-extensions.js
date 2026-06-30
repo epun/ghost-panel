@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { icons } from './icons.js';
 import { confirmDialog } from './modal.js';
+import { log } from './log.js';
 async function loadThree() { /* no-op — already loaded */ }
 
 /**
@@ -83,7 +84,7 @@ export class SceneObjectManager {
       // Let hosts that withhold `controls` (so Ghost Panel doesn't seize the
       // camera) still pause their own camera controls while the built-in gizmo
       // drags — otherwise the gizmo and the host's OrbitControls fight.
-      try { this._onDraggingChanged?.(e.value); } catch {}
+      try { this._onDraggingChanged?.(e.value); } catch (e) { log.debug('three-extensions', 'onDraggingChanged failed:', e); }
       // Pause/resume the AnimationMixer for the active object while dragging,
       // otherwise the mixer keeps overwriting position/rotation from its track
       // and the gizmo "snaps back". When drag ends, resume playback.
@@ -295,8 +296,8 @@ export class SceneObjectManager {
     this.objects[name] = entry;
     // Mirror ObjectManager's contract — downstream views (Outliner, Cmd+V
     // paste, contextual panel) listen on 'register' / 'change' to refresh.
-    this._listeners.register?.forEach(cb => { try { cb(name, object); } catch {} });
-    this._listeners.change?.forEach(cb => { try { cb(this.activeName, this.objects[this.activeName]?.object); } catch {} });
+    this._listeners.register?.forEach(cb => { try { cb(name, object); } catch (e) { log.debug('three-extensions', 'listener failed:', e); } });
+    this._listeners.change?.forEach(cb => { try { cb(this.activeName, this.objects[this.activeName]?.object); } catch (e) { log.debug('three-extensions', 'listener failed:', e); } });
   }
 
   /**
@@ -334,7 +335,7 @@ export class SceneObjectManager {
     delete this.objects[name];
     // 'remove' fires before 'change' so downstream views (graph editor, etc.)
     // can prune any per-object state using the actual reference.
-    this._listeners.remove?.forEach(cb => { try { cb(name, removed); } catch {} });
+    this._listeners.remove?.forEach(cb => { try { cb(name, removed); } catch (e) { log.debug('three-extensions', 'listener failed:', e); } });
     this._listeners.change?.forEach(cb => cb(this.activeName, null));
   }
 
@@ -359,8 +360,8 @@ export class SceneObjectManager {
       this._helperUpdaters.push(() => helper.update());
     }
     // Notify listeners so downstream views update immediately.
-    this._listeners.register?.forEach(cb => { try { cb(name, light); } catch {} });
-    this._listeners.change?.forEach(cb => { try { cb(this.activeName, this.objects[this.activeName]?.object); } catch {} });
+    this._listeners.register?.forEach(cb => { try { cb(name, light); } catch (e) { log.debug('three-extensions', 'listener failed:', e); } });
+    this._listeners.change?.forEach(cb => { try { cb(this.activeName, this.objects[this.activeName]?.object); } catch (e) { log.debug('three-extensions', 'listener failed:', e); } });
   }
 
   /**
@@ -405,8 +406,8 @@ export class SceneObjectManager {
     }
     // Notify listeners so downstream views (Outliner, contextual inspector,
     // camera button) react to the new camera immediately.
-    this._listeners.register?.forEach(cb => { try { cb(name, target); } catch {} });
-    this._listeners.change?.forEach(cb => { try { cb(this.activeName, this.objects[this.activeName]?.object); } catch {} });
+    this._listeners.register?.forEach(cb => { try { cb(name, target); } catch (e) { log.debug('three-extensions', 'listener failed:', e); } });
+    this._listeners.change?.forEach(cb => { try { cb(this.activeName, this.objects[this.activeName]?.object); } catch (e) { log.debug('three-extensions', 'listener failed:', e); } });
   }
 
   /** Call each frame so light/camera helpers track their source. */
@@ -521,7 +522,7 @@ export class SceneObjectManager {
     // contextual inspector (mini toolbar, Material folder), folder
     // visibility gates, and any other 'change' listener react reliably
     // to canvas-click selection.
-    this._listeners.change?.forEach(cb => { try { cb(this.activeName, this.objects[this.activeName]?.object); } catch {} });
+    this._listeners.change?.forEach(cb => { try { cb(this.activeName, this.objects[this.activeName]?.object); } catch (e) { log.debug('three-extensions', 'listener failed:', e); } });
   }
 
   /** Return a snapshot of every selected name (including the primary). */
@@ -546,7 +547,7 @@ export class SceneObjectManager {
       this.gizmo.detach();
       this.gizmo.getHelper().visible = false;
     }
-    this._listeners.change?.forEach(cb => { try { cb(null, null); } catch {} });
+    this._listeners.change?.forEach(cb => { try { cb(null, null); } catch (e) { log.debug('three-extensions', 'listener failed:', e); } });
   }
   setMode(mode) {
     this.currentMode = mode;
@@ -586,8 +587,8 @@ export class SceneObjectManager {
     if (this.activeName === oldName) this.activeName = newName;
     const entry = this.objects[newName];
     if (entry?.object && 'name' in entry.object) entry.object.name = newName;
-    this._listeners.rename?.forEach(cb => { try { cb(oldName, newName); } catch {} });
-    this._listeners.change?.forEach(cb => { try { cb(this.activeName, entry?.object); } catch {} });
+    this._listeners.rename?.forEach(cb => { try { cb(oldName, newName); } catch (e) { log.debug('three-extensions', 'listener failed:', e); } });
+    this._listeners.change?.forEach(cb => { try { cb(this.activeName, entry?.object); } catch (e) { log.debug('three-extensions', 'listener failed:', e); } });
     return true;
   }
 
@@ -607,8 +608,7 @@ export class SceneObjectManager {
       // to the scene (parent was null at register time) — avoids false warnings.
       if (entry.registeredParent == null && o.parent) entry.registeredParent = o.parent;
       if (entry.registeredParent && o.parent && o.parent !== entry.registeredParent) {
-        console.warn(
-          `[GhostPanel] getState("${name}"): object is no longer under its ` +
+        log.warn('three-extensions', `getState("${name}"): object is no longer under its ` +
           `original parent (likely a host multi-select pivot rig). The exported ` +
           `position/rotation/scale are LOCAL to the current parent and may not ` +
           `match the authored transform — read state.world, or restore the ` +

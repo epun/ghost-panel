@@ -1,3 +1,4 @@
+import { log } from './log.js';
 /**
  * Generic object manager — the persistent, workflow-agnostic backbone for
  * the Outliner, the bind picker, the Add menu, exports, etc.
@@ -137,7 +138,7 @@ export class ObjectManager {
     };
   }
   emit(event, ...args) {
-    (this._listeners[event] || []).forEach(cb => { try { cb(...args); } catch {} });
+    (this._listeners[event] || []).forEach(cb => { try { cb(...args); } catch (e) { log.debug('object-manager', 'listener failed:', e); } });
   }
 
   dispose() {

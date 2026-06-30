@@ -6,6 +6,7 @@
 
 import { icons } from './icons.js';
 import { clamp, clamp01 } from './utils.js';
+import { log } from './log.js';
 
 function row(labelText, tooltip) {
   const el = document.createElement('div');
@@ -211,7 +212,7 @@ export function createSlider(label, opts = {}) {
     if (!dragStart) return;
     dragStart = null;
     slider.classList.remove('dui-slider-active', 'dui-slider-dragging');
-    try { slider.releasePointerCapture(e.pointerId); } catch {}
+    try { slider.releasePointerCapture(e.pointerId); } catch (e) { log.debug('gizmo', 'releasePointerCapture failed:', e); }
   }
   slider.addEventListener('pointerup',   endDrag);
   slider.addEventListener('pointercancel', endDrag);
@@ -1297,7 +1298,7 @@ export function createTrigger(label, opts = {}) {
     if (timeoutId) clearTimeout(timeoutId);
     playing = true;
     el.classList.add('dui-trigger-playing');
-    try { onTrigger?.(); } catch (e) { console.error('[gizmo] trigger handler threw:', e); }
+    try { onTrigger?.(); } catch (e) { log.error('gizmo', 'trigger handler threw:', e); }
     if (duration && duration > 0) {
       // Width transition drives the progress fill — disable the
       // transition for the reset, then re-enable on next frame so the
@@ -1419,11 +1420,11 @@ export function createSequence(label, opts = {}) {
     if (!step) return;
     if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
     // Exit hook on the previous step (e.g. cleanup tweens)
-    try { steps[prev]?.onExit?.(); } catch (e) { console.error('[gizmo] sequence onExit threw:', e); }
+    try { steps[prev]?.onExit?.(); } catch (e) { log.error('gizmo', 'sequence onExit threw:', e); }
     // Enter hook on the new step
     playing = true;
     el.classList.add('dui-sequence-playing');
-    try { step.onEnter?.(); } catch (e) { console.error('[gizmo] sequence onEnter threw:', e); }
+    try { step.onEnter?.(); } catch (e) { log.error('gizmo', 'sequence onEnter threw:', e); }
     if (step.duration && step.duration > 0) {
       timeoutId = setTimeout(() => {
         playing = false;

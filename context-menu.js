@@ -11,6 +11,7 @@
 
 import { icons } from './icons.js';
 import { escapeHtml } from './utils.js';
+import { log } from './log.js';
 
 export class ContextMenu {
   constructor() {
@@ -57,7 +58,7 @@ export class ContextMenu {
         const item = items[idx];
         if (item?.disabled || !item?.onClick) return;
         this.close();
-        try { item.onClick(); } catch (e) { console.warn('[context-menu] action failed:', e); }
+        try { item.onClick(); } catch (e) { log.warn('context-menu', 'action failed:', e); }
       });
     });
     setTimeout(() => {

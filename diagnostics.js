@@ -19,6 +19,7 @@
  * the engine is quiet unless an issue is detected or the host calls run()
  * manually.
  */
+import { log } from './log.js';
 
 // ── Probe window.* for common scene / camera / renderer names ──────────────
 const SCENE_KEYS    = ['scene', 'threeScene', 'stage', 'world', 'three'];
@@ -118,7 +119,7 @@ export class DiagnosticEngine {
     }
     // Later passes: only if things got worse or a new issue appeared.
     if (pass > 0 && fixed.length > 0) {
-      console.info('[Ghost Panel] Auto-corrected:', fixed.map(f => f.id).join(', '));
+      log.info('diagnostics', 'Auto-corrected:', fixed.map(f => f.id).join(', '));
     }
     if (pass > 0 && blocking.length > 0 && this.status !== 'healthy') {
       this._consoleReport(blocking, pass);
@@ -467,26 +468,24 @@ export class DiagnosticEngine {
     const errors   = issues.filter(i => i.level === 'error');
     const warnings = issues.filter(i => i.level === 'warning');
 
-    const header = `%c Ghost Panel ${pass > 0 ? '(re-check)' : ''} `;
-    const headerStyle = 'background:#111;color:#fff;padding:2px 6px;border-radius:3px;font-weight:600';
+    const header = `Ghost Panel ${pass > 0 ? '(re-check)' : ''} — `;
 
     if (errors.length > 0) {
-      console.groupCollapsed(header + `%c ${errors.length} error(s) detected — click to expand`, headerStyle, 'color:#f87171');
+      log.info('diagnostics', header + `${errors.length} error(s) detected — click to expand`);
     } else if (warnings.length > 0) {
-      console.groupCollapsed(header + `%c ${warnings.length} warning(s) — click to expand`, headerStyle, 'color:#facc15');
+      log.info('diagnostics', header + `${warnings.length} warning(s) — click to expand`);
     }
 
     for (const issue of issues) {
       const icon = issue.level === 'error' ? '🔴' : issue.level === 'warning' ? '🟡' : 'ℹ️';
-      console.warn(`${icon} [${issue.id}] ${issue.title}\n   ${issue.detail}`);
+      log.warn('diagnostics', `${icon} [${issue.id}] ${issue.title}\n   ${issue.detail}`);
       if (issue.codeHint) {
-        console.log('%cFix suggestion:\n' + issue.codeHint, 'color:#94a3b8;font-family:monospace');
+        log.info('diagnostics', 'Fix suggestion:\n' + issue.codeHint);
       }
     }
 
-    console.log('%cOpen the diagnostic panel → click the dot in the Ghost Panel header, or call ui._diagnostics.show()', 'color:#6b7280');
-    console.log('%cAuto-generate a GitHub issue → ui._diagnostics.openIssueURL()', 'color:#6b7280');
-    console.groupEnd();
+    log.info('diagnostics', 'Open the diagnostic panel → click the dot in the Ghost Panel header, or call ui._diagnostics.show()');
+    log.info('diagnostics', 'Auto-generate a GitHub issue → ui._diagnostics.openIssueURL()');
   }
 
   // ── Badge (colored dot in the panel header) ───────────────────────────────
@@ -671,8 +670,8 @@ export class DiagnosticEngine {
 
     this._overlay.querySelector('[data-action="report"]')?.addEventListener('click', () => {
       navigator.clipboard?.writeText(JSON.stringify(this.getReport(), null, 2))
-        .then(() => console.info('[Ghost Panel] Diagnostic report copied to clipboard.'))
-        .catch(() => console.info('[Ghost Panel] Report:', JSON.stringify(this.getReport(), null, 2)));
+        .then(() => log.info('diagnostics', 'Diagnostic report copied to clipboard.'))
+        .catch(() => log.info('diagnostics', 'Report:', JSON.stringify(this.getReport(), null, 2)));
     });
 
     this._overlay.querySelector('[data-action="issue"]')?.addEventListener('click', () => {
@@ -694,7 +693,7 @@ export class DiagnosticEngine {
           }),
       ].join('\n');
       navigator.clipboard?.writeText(csv)
-        .then(() => console.info('[Ghost Panel] Prompt analytics copied as CSV.'))
+        .then(() => log.info('diagnostics', 'Prompt analytics copied as CSV.'))
         .catch(() => {
           const blob = new Blob([csv], { type: 'text/csv' });
           const a = Object.assign(document.createElement('a'), {

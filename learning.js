@@ -21,6 +21,7 @@ import { isDev } from './dev-mode.js';
 import { showToast } from './toast.js';
 import { icons } from './icons.js';
 import { escapeHtml } from './utils.js';
+import { log } from './log.js';
 
 const ENDPOINT = '/__ghost-panel/apply-fix';
 const STORAGE_KEY = 'ghost-panel:learning';
@@ -98,7 +99,7 @@ const PATTERN_REGISTRY = [
   }
   deselect() {`,
       replace: `    this.gizmo.setMode(this.currentMode);
-    this._listeners.change?.forEach(cb => { try { cb(this.activeName, this.objects[name].object); } catch {} });
+    this._listeners.change?.forEach(cb => { try { cb(this.activeName, this.objects[name].object); } catch (e) { log.debug('three-extensions', 'change listener failed:', e); } });
   }
   deselect() {`,
       reason: 'Without the explicit emit, canvas-click selection failed to ' +
@@ -206,20 +207,20 @@ export class LearningStore {
 
   /** Subscribe to changes (new records / proposals). */
   on(cb) { this._listeners.push(cb); return () => { this._listeners = this._listeners.filter(f => f !== cb); }; }
-  _emit() { this._listeners.forEach(cb => { try { cb(this); } catch {} }); }
+  _emit() { this._listeners.forEach(cb => { try { cb(this); } catch (e) { log.debug('learning', 'listener failed:', e); } }); }
 
   /** Wipe state. */
   clear() { this.records = []; this.proposals = []; this._persist(); this._emit(); }
 
   _persist() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ records: this.records.slice(-50), proposals: this.proposals })); } catch {}
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ records: this.records.slice(-50), proposals: this.proposals })); } catch (e) { log.warn('learning', 'localStorage save failed:', e); }
   }
   _loadPersisted() {
     try {
       const v = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
       if (Array.isArray(v.records))  this.records  = v.records;
       if (Array.isArray(v.proposals)) this.proposals = v.proposals;
-    } catch {}
+    } catch (e) { log.warn('learning', 'localStorage load failed:', e); }
   }
 }
 
@@ -392,7 +393,7 @@ export function attachLearning(ui) {
           showToast(`Auto-fix applied to ${next.file} — reload to load`, { icon: icons.sparkle, duration: 2800 });
         }
       }
-    } catch {}
+    } catch (e) { log.debug('learning', 'callback failed:', e); }
   });
 
   store.dispose = () => {
@@ -402,4 +403,3 @@ export function attachLearning(ui) {
   };
   return store;
 }
-

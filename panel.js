@@ -1,5 +1,6 @@
 import { Folder } from './folder.js';
 import { THEMES } from './styles.js';
+import { log } from './log.js';
 
 // ── Global theme coordination ──────────────────────────────────────────────
 // Every live Panel registers itself here so a single theme toggle flips ALL of
@@ -65,7 +66,7 @@ export class Panel {
   setTheme(name) {
     const tokens = THEMES[name];
     if (!tokens) {
-      console.warn(`[Ghost Panel] Unknown theme "${name}". Available: ${Object.keys(THEMES).join(', ')}`);
+      log.warn('panel', `Unknown theme "${name}". Available: ${Object.keys(THEMES).join(', ')}`);
       return;
     }
     this._currentTheme = name;

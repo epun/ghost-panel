@@ -1,3 +1,4 @@
+import { log } from './log.js';
 /**
  * Workflow-agnostic undo / redo stack.
  *
@@ -53,7 +54,7 @@ export class UndoStack {
   undo() {
     const cmd = this._past.pop();
     if (!cmd) return false;
-    try { cmd.undo(); } catch (e) { console.warn('[undo] failed:', e); }
+    try { cmd.undo(); } catch (e) { log.warn('undo', 'failed:', e); }
     this._future.push(cmd);
     this._emit('undo');
     return true;
@@ -62,7 +63,7 @@ export class UndoStack {
   redo() {
     const cmd = this._future.pop();
     if (!cmd) return false;
-    try { cmd.redo(); } catch (e) { console.warn('[redo] failed:', e); }
+    try { cmd.redo(); } catch (e) { log.warn('redo', 'failed:', e); }
     this._past.push(cmd);
     this._emit('redo');
     return true;
@@ -77,7 +78,7 @@ export class UndoStack {
   // stale widget values re-read live object state, while ignoring 'push'
   // (which fires mid-edit, when rebuilding would destroy the active control).
   on(cb) { this._listeners.push(cb); return () => { this._listeners = this._listeners.filter(f => f !== cb); }; }
-  _emit(reason) { this._listeners.forEach(cb => { try { cb(this, reason); } catch {} }); }
+  _emit(reason) { this._listeners.forEach(cb => { try { cb(this, reason); } catch (e) { log.debug('undo', 'listener failed:', e); } }); }
 
   /** Convenience: build a property-edit command for a flat numeric prop. */
   static propEdit(obj, prop, before, after, label) {

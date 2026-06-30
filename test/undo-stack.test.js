@@ -1,5 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { UndoStack } from '../undo-stack.js';
+import { log } from '../log.js';
 
 describe('UndoStack', () => {
   let nowSpy;
@@ -11,6 +12,8 @@ describe('UndoStack', () => {
   afterEach(() => {
     nowSpy?.mockRestore();
     vi.restoreAllMocks();
+    log.setLevel('info');
+    log.setOnError(null);
   });
 
   it('rejects invalid commands', () => {

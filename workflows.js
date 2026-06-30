@@ -1,3 +1,4 @@
+import { log } from './log.js';
 /**
  * Contextual workflows — auto-load the right tools, panels, and controls
  * based on what the project is.
@@ -761,7 +762,7 @@ export function detectWorkflow(opts) {
 export function enableWorkflow(ui, name, opts = {}) {
   const w = WORKFLOWS[name];
   if (!w) {
-    console.warn(`[Ghost Panel] Unknown workflow "${name}". Available: ${Object.keys(WORKFLOWS).join(', ')}`);
+    log.warn('workflows', `Unknown workflow "${name}". Available: ${Object.keys(WORKFLOWS).join(', ')}`);
     return;
   }
   ui._workflowFolderMap = ui._workflowFolderMap || new Map();
