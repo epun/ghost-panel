@@ -99,7 +99,7 @@ const PATTERN_REGISTRY = [
   }
   deselect() {`,
       replace: `    this.gizmo.setMode(this.currentMode);
-    this._listeners.change?.forEach(cb => { try { cb(this.activeName, this.objects[name].object); } catch (e) { log.warn('learning', 'localStorage save failed:', e); } });
+    this._listeners.change?.forEach(cb => { try { cb(this.activeName, this.objects[name].object); } catch (e) { log.debug('three-extensions', 'change listener failed:', e); } });
   }
   deselect() {`,
       reason: 'Without the explicit emit, canvas-click selection failed to ' +
@@ -207,13 +207,13 @@ export class LearningStore {
 
   /** Subscribe to changes (new records / proposals). */
   on(cb) { this._listeners.push(cb); return () => { this._listeners = this._listeners.filter(f => f !== cb); }; }
-  _emit() { this._listeners.forEach(cb => { try { cb(this); } catch (e) { log.warn('learning', 'localStorage load failed:', e); } }); }
+  _emit() { this._listeners.forEach(cb => { try { cb(this); } catch (e) { log.debug('learning', 'listener failed:', e); } }); }
 
   /** Wipe state. */
   clear() { this.records = []; this.proposals = []; this._persist(); this._emit(); }
 
   _persist() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ records: this.records.slice(-50), proposals: this.proposals })); } catch (e) { log.debug('learning', 'listener failed:', e); }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ records: this.records.slice(-50), proposals: this.proposals })); } catch (e) { log.warn('learning', 'localStorage save failed:', e); }
   }
   _loadPersisted() {
     try {

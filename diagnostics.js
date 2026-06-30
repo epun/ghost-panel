@@ -468,8 +468,7 @@ export class DiagnosticEngine {
     const errors   = issues.filter(i => i.level === 'error');
     const warnings = issues.filter(i => i.level === 'warning');
 
-    const header = `%c Ghost Panel ${pass > 0 ? '(re-check)' : ''} `;
-    const headerStyle = 'background:#111;color:#fff;padding:2px 6px;border-radius:3px;font-weight:600';
+    const header = `Ghost Panel ${pass > 0 ? '(re-check)' : ''} — `;
 
     if (errors.length > 0) {
       log.info('diagnostics', header + `${errors.length} error(s) detected — click to expand`);

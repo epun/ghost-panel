@@ -74,6 +74,20 @@ describe('log', () => {
     expect(errorSpy).toHaveBeenCalledWith('[Ghost Panel][index]', 'failed:', err);
   });
 
+  it('invokes onError even at silent level, with console suppressed', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const onError = vi.fn();
+    log.setLevel('silent');
+    log.setOnError(onError);
+
+    const err = new Error('boom');
+    log.error('index', 'failed:', err);
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith('index', 'failed:', err);
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
   it('swallows throwing onError hooks', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     log.setOnError(() => {

@@ -38,8 +38,9 @@ class GhostPanelLogger {
   debug(...args) { this._emit('debug', args); }
 
   _emit(level, args) {
-    if (!this._shouldLog(level)) return;
-
+    // The onError hook is a programmatic telemetry channel, intentionally
+    // decoupled from console verbosity: it fires for every error-level log
+    // even when the level is 'silent' (so hosts can collect errors quietly).
     if (level === 'error') {
       const hook = this._state.onError;
       if (hook) {
@@ -48,6 +49,8 @@ class GhostPanelLogger {
         } catch (e) { void e; }
       }
     }
+
+    if (!this._shouldLog(level)) return;
 
     const consoleLike = typeof console !== 'undefined' ? console : null;
     if (!consoleLike) return;

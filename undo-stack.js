@@ -54,7 +54,7 @@ export class UndoStack {
   undo() {
     const cmd = this._past.pop();
     if (!cmd) return false;
-    try { cmd.undo(); } catch (e) { log.debug('undo', 'failed:', e); }
+    try { cmd.undo(); } catch (e) { log.warn('undo', 'failed:', e); }
     this._future.push(cmd);
     this._emit('undo');
     return true;
@@ -63,7 +63,7 @@ export class UndoStack {
   redo() {
     const cmd = this._future.pop();
     if (!cmd) return false;
-    try { cmd.redo(); } catch (e) { log.debug('redo', 'failed:', e); }
+    try { cmd.redo(); } catch (e) { log.warn('redo', 'failed:', e); }
     this._past.push(cmd);
     this._emit('redo');
     return true;

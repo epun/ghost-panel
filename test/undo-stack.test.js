@@ -123,8 +123,7 @@ describe('UndoStack', () => {
     const stack = new UndoStack();
     const cmd = { undo: vi.fn(() => { throw new Error('undo fail'); }), redo: vi.fn(() => { throw new Error('redo fail'); }) };
     nowSpy.mockReturnValue(1);
-    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
-    log.setLevel('debug');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     stack.push(cmd);
 
@@ -132,7 +131,7 @@ describe('UndoStack', () => {
     expect(stack.canRedo()).toBe(true);
     expect(stack.redo()).toBe(true);
     expect(stack.canUndo()).toBe(true);
-    expect(debugSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledTimes(2);
   });
 
   it('clear empties both stacks and emits clear', () => {
