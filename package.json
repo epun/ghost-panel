@@ -65,6 +65,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:site": "vite build --config vite.config.site.js",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
