@@ -169,6 +169,11 @@ export function createGraphEditor(opts = {}) {
     onUpdate = () => {},
     onChange = () => {},
     onPrompt = null,    // (text, helpers) => Promise|void
+    // Playback / export timing. These are the "project settings" the panel
+    // exposes for animation — exporters (WebM, CSS @keyframes, WAAPI, keyframe
+    // JSON) read them via getSettings() so the deliverable matches the panel.
+    fps = 30,           // frames per second used when rendering to video
+    loop = true,        // true = infinite, false = play once, N = play N cycles
   } = opts;
 
   const root = document.createElement('div');
@@ -438,6 +443,8 @@ export function createGraphEditor(opts = {}) {
   // ── State ──
   const state = {
     duration,
+    fps,
+    loop,
     time: 0,
     playing: false,
     mode: 'fcurve',           // 'fcurve' | 'dopesheet'
@@ -1079,18 +1086,40 @@ export function createGraphEditor(opts = {}) {
   // ── Transport ──
   let playRAF = null;
   let lastFrame = 0;
+  let cyclesPlayed = 0;
+  // How many full cycles playback should run before stopping. `true` (the
+  // default) loops forever; `false` plays once; a number caps the cycles.
+  function maxCycles() {
+    if (state.loop === true)  return Infinity;
+    if (state.loop === false) return 1;
+    const n = Number(state.loop);
+    return Number.isFinite(n) && n > 0 ? n : Infinity;
+  }
   function play()  {
     if (state.playing) return;
     state.playing = true;
     footer.querySelector('.dui-graph-play').innerHTML = icons.pause;
     lastFrame = 0;
+    cyclesPlayed = 0;
     const tick = (now) => {
       if (!state.playing) return;
       if (lastFrame === 0) lastFrame = now;
       const dt = (now - lastFrame) / 1000;
       lastFrame = now;
       let t = state.time + dt;
-      if (t > state.duration) t = t % state.duration;
+      if (t > state.duration) {
+        cyclesPlayed++;
+        if (cyclesPlayed >= maxCycles()) {
+          // Land exactly on the final frame and stop — honors "play once"
+          // and finite cycle counts instead of looping forever.
+          setTime(state.duration);
+          applyBindings(state.duration);
+          onUpdate(state.duration, sampleAll(state.duration));
+          pause();
+          return;
+        }
+        t = t % state.duration;
+      }
       setTime(t);
       applyBindings(t);
       onUpdate(t, sampleAll(t));
@@ -1261,7 +1290,30 @@ export function createGraphEditor(opts = {}) {
     },
     play, pause, setTime,
     getTime: () => state.time,
+    getDuration: () => state.duration,
     isPlaying: () => state.playing,
+    /**
+     * Timing / playback settings the panel controls. Exporters read these so
+     * the deliverable (WebM video, CSS @keyframes, WAAPI script, keyframe
+     * JSON) matches what's configured on the right-hand side of the panel.
+     */
+    getSettings: () => ({
+      duration: state.duration,
+      fps: state.fps,
+      loop: state.loop,
+    }),
+    /** Update timing settings at runtime (e.g. from a host-driven control). */
+    setSettings(next = {}) {
+      if (typeof next.duration === 'number' && next.duration > 0) {
+        state.duration = next.duration;
+        if (state.viewMaxT === state.viewMinT || state.viewMaxT > state.duration) {
+          state.viewMaxT = state.duration;
+        }
+      }
+      if (typeof next.fps === 'number' && next.fps > 0) state.fps = next.fps;
+      if (next.loop !== undefined) state.loop = next.loop;
+      render();
+    },
     getTracks: () => state.tracks.map(t => ({
       name: t.name, color: t.color, keys: t.keys.map(k => ({ ...k })),
     })),

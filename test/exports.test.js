@@ -1,5 +1,39 @@
 import { describe, expect, it, vi } from 'vitest';
-import { downloadBlob, getAllExporters, getAvailableExporters, registerExporter } from '../exports.js';
+import { downloadBlob, getAllExporters, getAvailableExporters, registerExporter, runExport } from '../exports.js';
+
+// A minimal graph-editor stand-in exposing the same surface the exporters
+// read: getSettings() (duration / fps / loop) plus track accessors.
+function fakeEditor({ settings = {}, tracks = [] } = {}) {
+  return {
+    getSettings: () => settings,
+    getTime: () => 0,
+    getDuration: () => settings.duration,
+    getTracks: () => tracks.map(t => ({ name: t.name, color: t.color, keys: t.keys })),
+    getTracksFull: () => tracks,
+  };
+}
+
+// A web-bound track (adapter object with _el + x/y) so the CSS / WAAPI
+// exporters treat the group as a DOM target and emit real rules.
+function webTrack(name, keys) {
+  const obj = { _el: {}, name: name.split('.')[0], x: 0, y: 0 };
+  return { name, color: '#fff', keys, binding: { object: obj, path: name.split('.')[1] || name } };
+}
+
+function blobText(blob) {
+  if (typeof blob.text === 'function') return blob.text();
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsText(blob);
+  });
+}
+
+async function runToText(ui, id) {
+  const { blob } = await runExport(ui, id, { skipDownload: true });
+  return blobText(blob);
+}
 
 describe('exports registry', () => {
   it('returns a copy of all exporters and includes the built-ins', () => {
@@ -43,6 +77,67 @@ describe('exports registry', () => {
 
     expect(registerExporter(exporter)).toBe(exporter);
     expect(getAvailableExporters(['test-workflow']).some(e => e.id === id)).toBe(true);
+  });
+
+  it('animation-json export carries the panel duration / fps / loop settings', async () => {
+    const ui = { _graphEditor: fakeEditor({
+      settings: { duration: 3.5, fps: 24, loop: 2 },
+      tracks: [{ name: 'position.x', color: '#f00', keys: [{ time: 0, value: 0 }, { time: 3.5, value: 5 }] }],
+    }) };
+
+    const data = JSON.parse(await runToText(ui, 'animation-json'));
+    expect(data.duration).toBe(3.5);
+    expect(data.fps).toBe(24);
+    expect(data.loop).toBe(2);
+    expect(data.tracks).toHaveLength(1);
+    // Regression: duration used to always serialize as undefined and drop out.
+    expect('duration' in data).toBe(true);
+  });
+
+  it('CSS @keyframes export uses the panel duration and loop count', async () => {
+    const ui = { _graphEditor: fakeEditor({
+      settings: { duration: 4, fps: 30, loop: 3 },
+      tracks: [webTrack('box.x', [{ time: 0, value: 0 }, { time: 2, value: 100 }])],
+    }) };
+
+    const css = await runToText(ui, 'css-keyframes');
+    // 4s panel timeline wins over the 2s max keyframe time.
+    expect(css).toContain('4.000s');
+    // Finite loop → explicit iteration count, not `infinite`.
+    expect(css).toMatch(/linear 3;/);
+    expect(css).not.toContain('infinite');
+  });
+
+  it('CSS @keyframes export loops forever when loop is true', async () => {
+    const ui = { _graphEditor: fakeEditor({
+      settings: { duration: 2, loop: true },
+      tracks: [webTrack('box.x', [{ time: 0, value: 0 }, { time: 2, value: 100 }])],
+    }) };
+
+    const css = await runToText(ui, 'css-keyframes');
+    expect(css).toContain('infinite');
+  });
+
+  it('WAAPI export mirrors the panel duration and finite iteration count', async () => {
+    const ui = { _graphEditor: fakeEditor({
+      settings: { duration: 5, loop: 4 },
+      tracks: [webTrack('box.x', [{ time: 0, value: 0 }, { time: 2, value: 100 }])],
+    }) };
+
+    const js = await runToText(ui, 'waapi');
+    expect(js).toContain('duration: 5000');
+    expect(js).toContain('iterations: 4');
+    expect(js).not.toContain('Infinity');
+  });
+
+  it('WAAPI export falls back to infinite iterations when loop is unset', async () => {
+    const ui = { _graphEditor: fakeEditor({
+      settings: { duration: 1 },
+      tracks: [webTrack('box.x', [{ time: 0, value: 0 }, { time: 1, value: 100 }])],
+    }) };
+
+    const js = await runToText(ui, 'waapi');
+    expect(js).toContain('iterations: Infinity');
   });
 
   it('downloads blobs and strings through a temporary anchor and revokes the URL', () => {

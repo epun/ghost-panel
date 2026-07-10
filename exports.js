@@ -65,6 +65,38 @@ function timestamp() {
   return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 }
 
+// ─── Animation settings bridge ─────────────────────────────────────────
+// The Graph Editor (right-hand side of the panel) owns the animation's
+// timing: total duration, playback fps, and how many times it loops. These
+// helpers surface those settings to the exporters so a WebM / CSS / WAAPI /
+// JSON deliverable reflects the panel instead of a hard-coded default.
+
+/** Read the live animation settings from the graph editor, if one is active.
+ *  Per-call `opts` win over the panel so callers can still override. */
+function animationSettings(ui, opts = {}) {
+  const ed = ui?._graphEditor;
+  const s = (ed && typeof ed.getSettings === 'function') ? ed.getSettings() : {};
+  return {
+    duration: opts.duration ?? s.duration,
+    fps:      opts.fps      ?? s.fps,
+    loop:     opts.loop     ?? s.loop,
+  };
+}
+
+/** Normalize a `loop` setting (true | false | N) to an iteration count.
+ *  Infinite for `true`/unset, 1 for `false`, or the finite cycle count. */
+function loopIterations(loop) {
+  if (loop === false) return 1;
+  if (typeof loop === 'number' && Number.isFinite(loop) && loop > 0) return loop;
+  return Infinity; // true, undefined, or anything non-finite → loop forever
+}
+
+/** CSS `animation-iteration-count` value for a `loop` setting. */
+function loopToCSS(loop) {
+  const n = loopIterations(loop);
+  return n === Infinity ? 'infinite' : String(n);
+}
+
 // ─── Universal: JSON snapshot ──────────────────────────────────────────
 registerExporter({
   id: 'json',
@@ -115,21 +147,38 @@ registerExporter({
   async run(ui, opts = {}) {
     const canvas = opts.canvas || ui._renderer?.domElement || document.querySelector('canvas');
     if (!canvas) throw new Error('No canvas found for video export');
-    const duration = opts.duration || 5;          // seconds
-    const fps      = opts.fps || 30;
+    // Pull timing from the panel's Graph Editor so the recording matches the
+    // configured animation. When there's no animation workflow active (e.g.
+    // a static 3D/shader scene) these fall back to the old 5s @ 30fps default.
+    const settings   = animationSettings(ui, opts);
+    const cycleTime  = settings.duration || 5;    // seconds per loop
+    const cycles     = loopIterations(settings.loop);
+    // Capture the full set of loops the panel is configured for. Infinite
+    // loops (or no setting) record a single cycle so the export terminates.
+    const duration   = Number.isFinite(cycles) ? cycleTime * cycles : cycleTime;
+    const fps        = settings.fps || 30;
     const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
       ? 'video/webm;codecs=vp9'
       : 'video/webm';
     const stream = canvas.captureStream(fps);
     const rec    = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 });
     const chunks = [];
+    // If a graph editor is driving the animation, rewind and play it so the
+    // recording captures the timeline from the first frame rather than
+    // whatever the playhead happened to be sitting on.
+    const editor = ui._graphEditor;
     return new Promise((resolve, reject) => {
       rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
       rec.onstop = () => {
+        if (editor?.pause) editor.pause();
         const blob = new Blob(chunks, { type: mimeType });
         resolve({ blob, filename: `recording-${timestamp()}.webm` });
       };
       rec.onerror = reject;
+      if (editor?.setTime && editor?.play) {
+        editor.setTime(0);
+        editor.play();
+      }
       rec.start();
       // Auto-stop after `duration` seconds
       setTimeout(() => rec.state === 'recording' && rec.stop(), duration * 1000);
@@ -196,7 +245,17 @@ registerExporter({
   async run(ui) {
     const editor = ui._graphEditor;
     if (!editor) throw new Error('No animation graph editor active');
-    const data = { duration: editor.getTime ? undefined : null, tracks: editor.getTracks() };
+    // Emit the panel's real timing settings (duration / fps / loop) alongside
+    // the tracks. The previous `editor.getTime ? undefined : null` always
+    // resolved to `undefined`, so the duration silently dropped out of the
+    // JSON and re-imports lost the timeline length.
+    const settings = animationSettings(ui);
+    const data = {
+      duration: settings.duration ?? null,
+      fps:      settings.fps      ?? null,
+      loop:     settings.loop     ?? null,
+      tracks:   editor.getTracks(),
+    };
     return {
       blob: new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
       filename: `animation-${timestamp()}.json`,
@@ -221,8 +280,15 @@ registerExporter({
     const editor = ui._graphEditor;
     if (!editor) throw new Error('No animation graph editor active');
     const groups = groupTracksByTarget(editor);
-    const duration = Math.max(...Object.values(groups).flatMap(g => g.times)) || 1;
-    let css = `/* Ghost Panel CSS keyframes export — ${duration.toFixed(2)}s timeline */\n\n`;
+    // Prefer the panel's configured timeline length; if the keyframes extend
+    // past it, keep the longer span so no percentage exceeds 100%. The loop
+    // setting drives animation-iteration-count instead of a hard-coded
+    // `infinite`.
+    const settings = animationSettings(ui);
+    const maxKeyTime = Math.max(0, ...Object.values(groups).flatMap(g => g.times));
+    const duration = Math.max(settings.duration || 0, maxKeyTime) || 1;
+    const iterations = loopToCSS(settings.loop);
+    let css = `/* Ghost Panel CSS keyframes export — ${duration.toFixed(2)}s timeline, ${iterations} iteration(s) */\n\n`;
     Object.entries(groups).forEach(([id, group]) => {
       if (group.kind !== 'web') return;  // skip non-DOM groups in CSS body
       const safe = sanitizeIdent(id);
@@ -236,7 +302,7 @@ registerExporter({
       });
       css += `}\n`;
       css += `[data-ghost-panel-adapter="${id}"], .${safe} {\n`;
-      css += `  animation: ${animName} ${duration.toFixed(3)}s linear infinite;\n`;
+      css += `  animation: ${animName} ${duration.toFixed(3)}s linear ${iterations};\n`;
       css += `  transform-origin: 0 0;\n`;
       css += `}\n\n`;
     });
@@ -260,7 +326,13 @@ registerExporter({
     const editor = ui._graphEditor;
     if (!editor) throw new Error('No animation graph editor active');
     const groups = groupTracksByTarget(editor);
-    const duration = Math.max(...Object.values(groups).flatMap(g => g.times)) || 1;
+    // Match the panel's timeline length and loop count instead of assuming a
+    // keyframe-derived duration that always repeats forever.
+    const settings = animationSettings(ui);
+    const maxKeyTime = Math.max(0, ...Object.values(groups).flatMap(g => g.times));
+    const duration = Math.max(settings.duration || 0, maxKeyTime) || 1;
+    const iterations = loopIterations(settings.loop);
+    const iterationsJS = iterations === Infinity ? 'Infinity' : String(iterations);
     let js = `// Ghost Panel WAAPI export — drop into a page that has matching\n`;
     js += `// [data-ghost-panel-adapter="..."] elements (or rename the selectors).\n`;
     js += `// Returns the Animation handles so you can pause / scrub them.\n\n`;
@@ -277,7 +349,7 @@ registerExporter({
       js += `  const el_${safe} = root.querySelector('[data-ghost-panel-adapter="${id}"]');\n`;
       js += `  if (el_${safe}) handles[${JSON.stringify(id)}] = el_${safe}.animate([\n`;
       js += frames + '\n';
-      js += `  ], { duration: ${(duration * 1000).toFixed(0)}, iterations: Infinity });\n`;
+      js += `  ], { duration: ${(duration * 1000).toFixed(0)}, iterations: ${iterationsJS} });\n`;
     });
     js += `  return handles;\n}\n`;
     return { blob: new Blob([js], { type: 'application/javascript' }), filename: `waapi-${timestamp()}.js` };

@@ -211,6 +211,10 @@ export const WORKFLOWS = {
       const editor = mod.createGraphEditor({
         tracks,
         duration,
+        // Timing settings the exporters read back via getSettings(). Default to
+        // 30fps and infinite looping (the prior hard-coded export behavior).
+        fps: opts.fps ?? 30,
+        loop: opts.loop ?? true,
         height: opts.height ?? 280,
         onUpdate: opts.onUpdate || (() => {}),
         onChange: opts.onChange || (() => {}),
