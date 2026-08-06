@@ -46,6 +46,7 @@
     "./svelte": "./adapters/svelte.js",
     "./vue": "./adapters/vue.js",
     "./animation": "./animation.js",
+    "./materials": "./materials.js",
     "./skills": "./skills.js",
     "./styles": "./styles.js",
     "./dev-mode": "./dev-mode.js",

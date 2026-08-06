@@ -270,6 +270,7 @@ The factory shows up in `Shift+A` the next time the menu opens.
 |---|---|
 | **Floating panels** | Inspector + Scene. Drag headers, collapse bodies, clamps to viewport, theme-aware. |
 | **Outliner** | Click to select · eye to hide · trash to delete (with confirm modal) · double-click to rename · focus reticle to look through cameras. |
+| **Materials palette** | Every material in the scene as a rendered sphere swatch. Click to edit it in the Inspector · drag onto geometry to apply · `⌥`-drop to hit one face. |
 | **Contextual inspector** | Mini transform toolbar pinned to the panel edge. Live X/Y/Z + W/H + rotation. Drag-scrub or type to commit. |
 | **Transform gizmos** | Real `THREE.TransformControls` in 3D · custom SVG handles in 2D · CSS-transform handles on DOM elements. `G`/`R`/`S` for modal transform with `X`/`Y`/`Z` axis constraints. |
 | **Graph editor** | F-curves + dope sheet. Per-key easing. Scrubbable playhead. Bind tracks to any host property at runtime. |
@@ -351,6 +352,47 @@ circles.forEach(c => ui.objectManager.register(c.name, c));
 ```
 
 The outliner gets each circle, the gizmo overlays on selection, properties (color, radius, etc.) appear in the inspector. Your render loop reads from `c.x` / `c.y` / `c.radius` directly.
+
+### Materials — swatch grid, drag to apply
+
+The Scene panel carries a materials palette under the Outliner. It walks the
+scene on its own, so there's nothing to register:
+
+```js
+const ui = createGhostPanel({ scene, camera, renderer, controls });
+// The palette is already there. Turn it off with materialsPanel: false.
+```
+
+Each material renders as a lit sphere on a transparent checkerboard, named
+after its base color (`RGB_255-204-102`) unless you gave it a `.name`.
+
+- **Click** a swatch → its properties open in the Inspector, bound to the
+  material itself. Unassigned materials are editable too, which is the point
+  of the `+` button.
+- **Drag** a swatch onto geometry in the viewport → applies to the whole
+  object. Dropping on a Group re-skins every mesh under it.
+- **`⌥`/`Alt` + drag** → applies to just the geometry group under the cursor:
+  one face of a box, one slot of a multi-material GLTF mesh. A single-material
+  mesh is split into per-group slots on the spot, seeded with what it had.
+- **Drag onto an Outliner row** → whole object, useful when the target isn't
+  on screen.
+
+Every assignment is one `Cmd+Z` away. Three filters sit above the grid: `All`,
+`Unused` (nothing references it), and `Active Object`.
+
+```js
+ui.materials.create();                       // new Standard material
+ui.materials.select(mat);                    // open it in the Inspector
+ui.materials.assignToSelection(mat);         // apply to the current selection
+ui.materials.assign(mesh, mat, { slot: 2 }); // apply to one material slot
+ui.materials.getMaterials();                 // every material the palette lists
+ui.refreshMaterials();                       // force a re-scan + preview redraw
+```
+
+Thumbnails come from a small dedicated WebGL renderer and are cached against a
+fingerprint of each material's visual properties, so editing roughness redraws
+one swatch and nothing else. Where WebGL isn't available the swatches fall back
+to flat base-color chips and everything else keeps working.
 
 ### Custom controls anywhere
 
@@ -460,6 +502,7 @@ Or override directly in CSS:
 | `liquidGlass` | `false` | `true` · `'light'` |
 | `liquidGlassScenePanel` | `false` | Same for the scene panel |
 | `scenePanel` | `false` | Add the left Outliner panel |
+| `materialsPanel` | `true` | Add the materials palette under the Outliner (Three.js hosts) |
 | `scene` · `camera` · `renderer` · `controls` | — | Three.js handles. Trigger the 3D workflow automatically. |
 | `autoRegister` | `true` | Auto-scan and register scene objects |
 | `workflow` | `'auto'` | `'3d'` · `'animation'` · `'web'` · `'2d'` · `'audio'` · `'shader'` · `'ascii'` · `'auto'` · array |
@@ -474,6 +517,8 @@ Or override directly in CSS:
 | `ui.show()` · `ui.hide()` · `ui.toggle()` · `ui.isVisible()` | Visibility control |
 | `ui.bindToggleKey(key, mods?)` | Global toggle shortcut |
 | `ui.objectManager` | `SceneObjectManager` (Three.js) or generic `ObjectManager`. Has `register`, `select`, `remove`, `on('change' \| 'select' \| 'register' \| 'remove')`, etc. |
+| `ui.materials` | Materials palette handle: `create`, `select`, `remove`, `assign`, `assignToSelection`, `getMaterials`, `setFilter`, `refresh`, `active`. `null` on non-Three hosts. |
+| `ui.refreshMaterials()` | Re-scan the scene for materials and redraw the swatches |
 | `ui.activeWorkflows` | Array of active workflow ids |
 | `ui.enableWorkflow(name, opts)` · `ui.disableWorkflow(name)` | Manual workflow control |
 | `ui.rescan()` | Force a re-scan of the scene + workflow detection (also runs automatically on register/remove) |

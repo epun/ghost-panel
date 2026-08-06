@@ -273,6 +273,20 @@ export const BUILTIN_SKILLS = [
     apply: () => ({}),   // material folder is wired by contextual inspector
   },
   {
+    id: '3d.materials-palette',
+    name: 'Materials Palette',
+    category: '3D',
+    workflows: ['3d'],
+    description: 'Swatch grid of every scene material. Click to edit, drag onto geometry to apply (Alt-drop targets one geometry group).',
+    properties: [
+      { id: 'filter', type: 'enum', options: ['all', 'unused', 'active'] },
+      { id: 'name',   type: 'string', per: 'material' },
+      { id: 'color',  type: 'color',  per: 'material' },
+    ],
+    detect: (ctx) => !!ctx.scene,
+    apply: () => ({}),   // palette is wired in createGhostPanel core
+  },
+  {
     id: '3d.lighting',
     name: 'Lighting',
     category: '3D',
