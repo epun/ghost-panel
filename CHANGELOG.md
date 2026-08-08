@@ -14,8 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clicking a swatch opens that material's properties in the Inspector, bound
   to the material instance so unassigned materials are editable too.
 - Drag a swatch onto viewport geometry or an Outliner row to apply it. A plain
-  drop re-skins the whole object; `Alt`/`⌥` drops onto the geometry group
-  under the cursor, splitting a single-material mesh into per-group slots.
+  drop re-skins the whole object — the whole model for an imported group, not
+  just the sub-mesh under the ray. `Alt`/`⌥` narrows to the geometry group
+  under the cursor (splitting a single-material mesh into per-group slots), or
+  to that one sub-mesh when its geometry has no groups.
 - `materialsPanel` option, `ui.materials` handle, `ui.refreshMaterials()`, and
   the `ghost-panel/materials` subpath export.
 

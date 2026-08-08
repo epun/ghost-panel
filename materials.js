@@ -13,9 +13,11 @@
  *      editable too.
  *   3. **Assigns by drag** — drag a swatch onto geometry in the viewport
  *      (or onto an Outliner row) to apply it. A plain drop re-skins the
- *      WHOLE object; holding Alt/Option drops onto just the geometry
- *      group under the cursor (a single face of a box, one slot of a
- *      multi-material GLTF mesh, …).
+ *      WHOLE object — for an imported model, the whole model, not the one
+ *      sub-mesh the ray touched. Holding Alt/Option narrows the target to
+ *      the geometry group under the cursor (a single face of a box, one
+ *      slot of a multi-material mesh), or to that one sub-mesh when its
+ *      geometry has no groups.
  *
  * Thumbnails are rendered by a tiny dedicated WebGLRenderer on a
  * transparent background — the checkerboard behind them is CSS, so the
@@ -719,6 +721,12 @@ export function attachMaterialsPalette(ui, opts = {}) {
         options: MAT_TYPES.map(t => MAT_LABELS[t]),
         value: MAT_LABELS[mat.type],
         tooltip: 'Swap the material class — color, map and opacity carry over',
+        // Opt out of the Folder-level auto-undo wrapper: swapMaterialClass
+        // pushes its own entry. With both in play the first Cmd+Z popped the
+        // wrapper's entry, which re-invoked this handler with the ORIGINAL
+        // type — a no-op against the already-replaced material — so undo
+        // silently did nothing until you pressed it twice.
+        undo: false,
         onChange: (label) => {
           const target = MAT_TYPES.find(t => MAT_LABELS[t] === label) || label;
           if (target === mat.type) return;
@@ -911,16 +919,28 @@ export function attachMaterialsPalette(ui, opts = {}) {
     return hits.length ? hits[0] : null;
   }
 
-  /** Walk up to the registered Outliner entry that owns a hit mesh. */
-  function ownerNameFor(object) {
+  /**
+   * Walk up to the registered Outliner entry that owns a hit mesh.
+   *
+   * `outermost: true` keeps climbing past the first match to the top of the
+   * registered chain. That matters for imported models: autoRegisterScene
+   * registers a GLTF root Group AND its sub-meshes, so the nearest match for
+   * a hit on one panel of a car is that panel — while a plain drop is
+   * supposed to re-skin the whole car.
+   */
+  function ownerNameFor(object, { outermost = false } = {}) {
     if (!om?.objects) return null;
+    let found = null;
     let n = object;
     while (n) {
       const match = Object.entries(om.objects).find(([, e]) => e.object === n);
-      if (match) return match[0];
+      if (match) {
+        found = match[0];
+        if (!outermost) return found;
+      }
       n = n.parent;
     }
-    return null;
+    return found;
   }
 
   function carriesMaterial(e) {
@@ -935,25 +955,40 @@ export function attachMaterialsPalette(ui, opts = {}) {
   /**
    * Resolve what a viewport drop would hit.
    *
-   * Plain drop  → the whole registered object (a Group re-skins all its meshes).
-   * Alt/Option  → only the geometry group under the cursor, so a single face
-   *               of a box or one slot of a multi-material mesh can differ.
+   * Plain drop → the whole registered object. On an imported model that's the
+   *              model root, not the one sub-mesh the ray happened to touch.
+   * Alt/Option → the NARROWEST thing under the cursor: the geometry group when
+   *              the hit mesh has them (one face of a box, one slot of a
+   *              multi-material mesh), otherwise that single mesh on its own.
    */
   function resolveDrop(e) {
     const hit = pickAt(e.clientX, e.clientY);
     if (!hit) return null;
-    const perSlot = e.altKey;
-    const slot = perSlot ? slotForIntersection(hit) : null;
-    const ownerName = ownerNameFor(hit.object);
-    const target = perSlot && slot != null
-      ? hit.object
-      : (ownerName ? om.getObject(ownerName) : hit.object);
+    const mesh = hit.object;
+
+    if (e.altKey) {
+      const slot = slotForIntersection(hit);
+      return {
+        hit,
+        slot,
+        target: mesh,
+        highlight: mesh,
+        perSlot: slot != null,
+        label: ownerNameFor(mesh) || mesh.name || mesh.type || 'object',
+        scope: slot != null ? `slot ${slot}` : 'this mesh only',
+      };
+    }
+
+    const ownerName = ownerNameFor(mesh, { outermost: true });
+    const target = ownerName ? om.getObject(ownerName) : mesh;
     return {
       hit,
-      slot,
+      slot: null,
       target,
-      label: ownerName || hit.object.name || hit.object.type || 'object',
-      perSlot: perSlot && slot != null,
+      highlight: target,
+      perSlot: false,
+      label: ownerName || mesh.name || mesh.type || 'object',
+      scope: 'whole object · ⌥ for one part',
     };
   }
 
@@ -967,12 +1002,9 @@ export function attachMaterialsPalette(ui, opts = {}) {
       showBadge(e.clientX, e.clientY, 'No geometry here', false);
       return;
     }
-    setHighlight(drop.perSlot ? drop.hit.object : drop.target);
-    lastHover = { object: drop.perSlot ? drop.hit.object : drop.target, slot: drop.slot };
-    const scope = drop.perSlot
-      ? `slot ${drop.slot}`
-      : `whole object${e.altKey ? '' : ' · ⌥ for one face'}`;
-    showBadge(e.clientX, e.clientY, `<b>${drop.label}</b><span>${scope}</span>`, true);
+    setHighlight(drop.highlight);
+    lastHover = { object: drop.highlight, slot: drop.slot };
+    showBadge(e.clientX, e.clientY, `<b>${drop.label}</b><span>${drop.scope}</span>`, true);
   }
 
   function onCanvasDrop(e) {

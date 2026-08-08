@@ -370,10 +370,12 @@ after its base color (`RGB_255-204-102`) unless you gave it a `.name`.
   material itself. Unassigned materials are editable too, which is the point
   of the `+` button.
 - **Drag** a swatch onto geometry in the viewport → applies to the whole
-  object. Dropping on a Group re-skins every mesh under it.
-- **`⌥`/`Alt` + drag** → applies to just the geometry group under the cursor:
-  one face of a box, one slot of a multi-material GLTF mesh. A single-material
-  mesh is split into per-group slots on the spot, seeded with what it had.
+  object. On an imported model that's the whole model, not the one sub-mesh the
+  ray happened to touch.
+- **`⌥`/`Alt` + drag** → narrows to the smallest thing under the cursor: the
+  geometry group (one face of a box, one slot of a multi-material mesh), or
+  that single sub-mesh when its geometry has no groups. A single-material mesh
+  is split into per-group slots on the spot, seeded with what it had.
 - **Drag onto an Outliner row** → whole object, useful when the target isn't
   on screen.
 
