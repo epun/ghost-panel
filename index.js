@@ -33,6 +33,7 @@ import {
 import { ObjectManager } from './object-manager.js';
 import { createGizmoSystem } from './gizmos.js';
 import { attachContextualInspector } from './contextual.js';
+import { attachMaterialsPalette } from './materials.js';
 import { ModalTransform, Modal2DTransform } from './modal-transform.js';
 import { Gizmo2D } from './gizmo-2d.js';
 import { UndoStack } from './undo-stack.js';
@@ -224,6 +225,10 @@ export function createGhostPanel(opts = {}) {
     // utility panels that don't need an outliner).
     scenePanel = true,
     scenePanelTitle = 'Scene',
+    // Materials palette — a swatch grid of every material in the scene,
+    // mounted under the Outliner. Three.js hosts only (it needs a scene to
+    // walk and a canvas to drop onto). Pass false to leave it out.
+    materialsPanel = true,
   } = opts;
 
   if (logLevel != null) log.setLevel(logLevel);
@@ -499,6 +504,8 @@ export function createGhostPanel(opts = {}) {
     objectManager,
     gizmos,
     refreshSceneObjects: () => sceneObjectsView?.refresh(),
+    /** Re-scan the scene for materials and re-render the palette swatches. */
+    refreshMaterials: () => ui.materials?.refresh(),
     // Workflow system — multiple workflows can be active at once
     applyWorkflow(name, wOpts) { return applyWorkflow(ui, name, wOpts); }, // legacy: switch to single
     enableWorkflow(name, wOpts) { return enableWorkflow(ui, name, wOpts); },
@@ -531,6 +538,7 @@ export function createGhostPanel(opts = {}) {
       // is clean: drop the gizmo's window pointer listeners and our keydown
       // handlers, none of which were being removed before. See issue #15 / §6.
       gizmos?.dispose();
+      ui.materials?.dispose();
       toggleKeyHandlers.forEach(h => window.removeEventListener('keydown', h));
       if (ui._undoKeyHandler) window.removeEventListener('keydown', ui._undoKeyHandler);
     },
@@ -624,6 +632,20 @@ export function createGhostPanel(opts = {}) {
 
   // Initial scan
   detectAndSync();
+
+  // ── Materials palette (scene panel) ──
+  // Mounted BEFORE the contextual inspector on purpose: both surfaces write
+  // the Inspector's 'Material' folder, and whoever subscribes to the
+  // objectManager first gets to release that slot on a selection change
+  // before the other claims it. Palette first → contextual wins the slot
+  // whenever a mesh is selected, which is the behavior we want.
+  if (scene && objectManager && materialsPanel) {
+    try {
+      ui.materials = attachMaterialsPalette(ui, { panel: leftPanel || panel });
+    } catch (e) {
+      log.error('index', 'attachMaterialsPalette failed:', e);
+    }
+  }
 
   // ── Contextual inspector (mode toolbar + material on selection) ──
   // Now that `ui` exists with objectManager, attach the contextual layer.
@@ -1106,6 +1128,9 @@ export { Folder } from './folder.js';
 export * as controls from './controls.js';
 export { SceneObjectManager, addSceneObjectsFolder, addCameraFolder, autoRegisterScene } from './three-extensions.js';
 export { createGizmoSystem, gizmoFactories } from './gizmos.js';
+export { attachMaterialsPalette, assignMaterial, collectSceneMaterials,
+         materialLabel, materialSignature, slotForIntersection, groupIndexForFace,
+         MATERIAL_DRAG_MIME } from './materials.js';
 export { initTooltips, attachTooltip } from './tooltip.js';
 export { createGraphEditor, addGraphEditor } from './animation.js';
 export { WORKFLOWS, detectWorkflow, detectWorkflows, listWorkflows,

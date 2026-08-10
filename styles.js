@@ -4856,6 +4856,217 @@ const CSS = /* css */ `
   background: hsl(240 6% 10% / 0.06);
   border-color: hsl(240 6% 10% / 0.12);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Materials palette — the swatch grid that lists every material in the
+   scene. Thumbnails render on a TRANSPARENT background, so the
+   checkerboard below is what sells "this sphere has alpha" the same way
+   an image editor does.
+   ════════════════════════════════════════════════════════════════════════ */
+.dui-matpal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Action row: new / re-render / assign / pick … delete */
+.dui-matpal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.dui-matpal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: hsl(var(--muted-foreground, 240 5% 65%));
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.dui-matpal-btn:hover:not(:disabled) {
+  color: hsl(var(--foreground, 0 0% 98%));
+  background: hsl(var(--secondary, 240 4% 16%));
+  border-color: hsl(var(--border, 240 4% 22%));
+}
+.dui-matpal-btn:disabled { opacity: 0.35; cursor: default; }
+.dui-matpal-btn.dui-danger:hover:not(:disabled) {
+  color: hsl(0 72% 62%);
+  border-color: hsl(0 72% 62% / 0.4);
+  background: hsl(0 72% 62% / 0.12);
+}
+.dui-matpal-sep {
+  width: 1px;
+  height: 14px;
+  margin: 0 4px;
+  background: hsl(var(--border, 240 4% 22%));
+}
+.dui-matpal-spacer { flex: 1; }
+
+/* Filter chips: All / Unused / Active Object */
+.dui-matpal-tabs {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+.dui-matpal-tab {
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: hsl(var(--muted-foreground, 240 5% 65%));
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.dui-matpal-tab:hover { color: hsl(var(--foreground, 0 0% 98%)); }
+.dui-matpal-tab.dui-active {
+  color: hsl(var(--primary-foreground, 0 0% 98%));
+  background: hsl(var(--primary, 217 91% 60%));
+}
+
+/* The grid itself — auto-fills so it reflows with the panel's resizer. */
+.dui-matgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 1px;
+}
+
+.dui-mat-swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-drag: element;
+}
+.dui-mat-swatch:active { cursor: grabbing; }
+
+.dui-mat-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border, 240 4% 22%));
+  /* Alpha checkerboard, drawn with two offset conic gradients. */
+  background-color: hsl(240 4% 24%);
+  background-image:
+    conic-gradient(hsl(240 3% 34%) 25%, transparent 0 50%, hsl(240 3% 34%) 0 75%, transparent 0),
+    conic-gradient(hsl(240 3% 34%) 25%, transparent 0 50%, hsl(240 3% 34%) 0 75%, transparent 0);
+  background-size: 12px 12px;
+  background-position: 0 0, 6px 6px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.dui-mat-swatch:hover .dui-mat-thumb {
+  border-color: hsl(var(--muted-foreground, 240 5% 65%));
+}
+.dui-mat-swatch.dui-selected .dui-mat-thumb {
+  border-color: hsl(var(--primary, 217 91% 60%));
+  box-shadow: 0 0 0 1px hsl(var(--primary, 217 91% 60%));
+}
+.dui-mat-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+/* Fallback when WebGL previews aren't available: a flat base-color chip. */
+.dui-mat-chip {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* "0" marker on materials nothing references yet. */
+.dui-mat-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 3px;
+  font-size: 8px;
+  line-height: 12px;
+  text-align: center;
+  color: hsl(var(--foreground, 0 0% 98%));
+  background: hsl(240 6% 10% / 0.72);
+  border-radius: 6px;
+}
+
+.dui-mat-name {
+  font-size: 9px;
+  line-height: 1.2;
+  color: hsl(var(--muted-foreground, 240 5% 65%));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dui-mat-swatch.dui-selected .dui-mat-name {
+  color: hsl(var(--foreground, 0 0% 98%));
+}
+
+.dui-matpal-empty {
+  padding: 10px 2px;
+  font-size: 10px;
+  color: hsl(var(--muted-foreground, 240 5% 65%));
+}
+
+/* Outliner row lit up as a drop target while a material is in flight. */
+.dui-list-item.dui-mat-droptarget {
+  outline: 1px solid hsl(var(--primary, 217 91% 60%));
+  outline-offset: -1px;
+  background: hsl(var(--primary, 217 91% 60%) / 0.16);
+}
+body.dui-mat-dragging { cursor: copy; }
+
+/* Cursor-following label that names the drop target and its scope. */
+.dui-matdrop-badge {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 100000;
+  display: none;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 220px;
+  padding: 4px 8px;
+  font-family: ui-sans-serif, -apple-system, system-ui, sans-serif;
+  font-size: 10px;
+  line-height: 1.3;
+  color: hsl(0 0% 98%);
+  background: hsl(240 6% 8% / 0.94);
+  border: 1px solid hsl(0 0% 100% / 0.14);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px hsl(240 10% 4% / 0.45);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.dui-matdrop-badge.dui-visible { display: flex; }
+.dui-matdrop-badge b { font-weight: 600; }
+.dui-matdrop-badge span { color: hsl(240 5% 65%); font-size: 9px; }
+.dui-matdrop-badge.dui-matdrop-ok { border-color: hsl(217 91% 60% / 0.6); }
+
+/* Light theme */
+:root.dui-theme-light .dui-mat-thumb {
+  background-color: hsl(0 0% 100%);
+  background-image:
+    conic-gradient(hsl(240 6% 90%) 25%, transparent 0 50%, hsl(240 6% 90%) 0 75%, transparent 0),
+    conic-gradient(hsl(240 6% 90%) 25%, transparent 0 50%, hsl(240 6% 90%) 0 75%, transparent 0);
+}
+:root.dui-theme-light .dui-mat-badge {
+  color: hsl(240 10% 10%);
+  background: hsl(0 0% 100% / 0.8);
+}
 `;
 
 let injected = false;
