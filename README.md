@@ -396,6 +396,32 @@ fingerprint of each material's visual properties, so editing roughness redraws
 one swatch and nothing else. Where WebGL isn't available the swatches fall back
 to flat base-color chips and everything else keeps working.
 
+### Custom exporters
+
+The export menu is extensible. Register a format and it appears alongside the
+built-ins:
+
+```js
+import { registerExporter, runExport } from 'ghost-panel';
+
+registerExporter({
+  id: 'my-format',
+  label: 'My format',
+  description: 'Shown under the label in the menu',
+  mime: 'text/plain',
+  extension: 'txt',
+  // Omit `workflows` to offer it in every workflow, or list the ones it suits.
+  async run(ui, opts) {
+    return { blob: new Blob(['...']), filename: 'export.txt' };
+  },
+});
+
+// Menu entries call this for you; call it directly to export programmatically.
+runExport(ui, 'my-format');
+```
+
+Pass `{ skipDownload: true }` as `opts` to get the blob back without saving it.
+
 ### Custom controls anywhere
 
 The folder API is fluent:
