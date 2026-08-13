@@ -557,6 +557,10 @@ export async function runExport(ui, id, opts = {}) {
   const exp = REGISTRY.find(e => e.id === id);
   if (!exp) throw new Error(`Unknown exporter: ${id}`);
   const result = await exp.run(ui, opts);
+  // An exporter may handle its own saving (the host-save entry does, and so do
+  // hosts that need to route downloads through a sandbox API) and signal that
+  // by returning null. Without this guard the next line dereferences null.
+  if (!result) return null;
   const filename = result.filename || `export.${exp.extension}`;
   const blob     = result.blob || result;
   if (opts.skipDownload) return result;
