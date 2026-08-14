@@ -1143,3 +1143,8 @@ export { LearningStore, attachLearning } from './learning.js';
 export { DiagnosticEngine, attachDiagnostics } from './diagnostics.js';
 export { AugmentEngine, attachAugment, scanProperties, parseIntent, buildRecipe, applyRecipe } from './augment.js';
 export { PromptAnalytics } from './prompt-analytics.js';
+// Exporter registry. Imported above for internal use, and re-exported here so
+// hosts can add their own formats to the export menu — without this (and the
+// "./exports" entry in the package's exports map) there is no supported import
+// path to it from outside the package.
+export { registerExporter, runExport, getAvailableExporters, getAllExporters, downloadBlob } from './exports.js';

@@ -2,7 +2,7 @@
   "name": "ghost-panel",
   "version": "0.1.0",
   "type": "module",
-  "description": "Ghost Panel — workflow-aware inspector for Three.js / 2D canvas / web. Outliner, mini transform toolbar, graph editor, undo, copy/paste, exporters.",
+  "description": "Ghost Panel \u2014 workflow-aware inspector for Three.js / 2D canvas / web. Outliner, mini transform toolbar, graph editor, undo, copy/paste, exporters.",
   "keywords": [
     "three",
     "threejs",
@@ -46,6 +46,7 @@
     "./svelte": "./adapters/svelte.js",
     "./vue": "./adapters/vue.js",
     "./animation": "./animation.js",
+    "./exports": "./exports.js",
     "./materials": "./materials.js",
     "./skills": "./skills.js",
     "./styles": "./styles.js",
