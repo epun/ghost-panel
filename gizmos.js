@@ -369,6 +369,7 @@ const FACTORIES = {
 
 export function createGizmoSystem(scene, camera, renderer, orbitControls) {
   let active = null;       // { type, mesh, target }
+  let suppressed = false;  // true while ui.hide() is in effect
   let dragging = null;     // { handle, plane, offset }
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -395,6 +396,9 @@ export function createGizmoSystem(scene, camera, renderer, orbitControls) {
     } else {
       scene.add(mesh);
     }
+    // Selecting an object while the panels are hidden must not paint a new
+    // gizmo into the scene.
+    if (suppressed) mesh.visible = false;
     active = { type, mesh, target };
     return mesh;
   }
@@ -470,11 +474,22 @@ export function createGizmoSystem(scene, camera, renderer, orbitControls) {
     window.removeEventListener('pointerup', onPointerUp);
   }
 
+  /**
+   * Show/hide the attached gizmo mesh without detaching it, so ui.hide()
+   * leaves no geometry painting into the host's scene and ui.show() puts the
+   * same gizmo back.
+   */
+  function setVisible(v) {
+    if (active?.mesh) active.mesh.visible = !!v;
+    suppressed = !v;
+  }
+
   return {
     attach,
     detach,
     list,
     on,
+    setVisible,
     get active() { return active; },
     dispose,
   };

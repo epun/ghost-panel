@@ -37,8 +37,10 @@ Each one boots Ghost Panel against a different host:
 
 ## Install
 
+Ghost Panel is not on the npm registry yet, so install it from GitHub:
+
 ```bash
-npm install ghost-panel
+npm install github:epun/ghost-panel
 npm install three     # peer dep (only if you're using Three.js)
 ```
 
@@ -46,6 +48,16 @@ Or grab the source — Ghost Panel has no required runtime dependencies of its o
 
 ```js
 import { createGhostPanel } from './lib/ghost-panel/index.js';
+```
+
+**Vite users:** add `three` to `resolve.dedupe` so your app and Ghost Panel share
+one Three.js instance. Without it Vite pre-bundles your copy separately from the
+one resolved inside the package, and you get `WARNING: Multiple instances of
+Three.js being imported` plus `instanceof` checks that fail across the boundary:
+
+```js
+// vite.config.js
+export default { resolve: { dedupe: ['three'] } };
 ```
 
 ---
@@ -68,7 +80,8 @@ const ui = createGhostPanel({ scene, camera, renderer });
 <summary><b>HTML — drop-in &lt;script&gt; tag (no build step)</b></summary>
 
 ```html
-<script src="https://unpkg.com/ghost-panel/dist/ghost-panel.umd.js"></script>
+<!-- Served from the GitHub repo until the npm package is published. -->
+<script src="https://cdn.jsdelivr.net/gh/epun/ghost-panel@main/dist/ghost-panel.umd.js"></script>
 <script>
   const ui = GhostPanel.createGhostPanel({ /* options */ });
 </script>
@@ -182,7 +195,7 @@ createApp(App).use(GhostPanelPlugin).mount('#app');
 Ghost Panel is npm-installable, ships a JSDoc-annotated API, and includes a machine-readable surface at `AGENTS.md`. To wire it into any project an AI agent is editing:
 
 ```bash
-npm install ghost-panel
+npm install github:epun/ghost-panel
 ```
 
 ```js
@@ -300,7 +313,7 @@ heroMesh.name   = 'Hero';
 lampGroup.name  = 'Lamp';
 povCamera.name  = 'POV';
 
-ui.bindToggleKey('D', { shift: true });
+// Shift+D already toggles the panel — bindToggleKey() is only for extra chords.
 
 function frame() {
   requestAnimationFrame(frame);
@@ -524,7 +537,8 @@ Or override directly in CSS:
 | `title` | `'Debug'` | Inspector header text |
 | `side` | `'right'` | `'left'` or `'right'` |
 | `width` | auto | Inspector px width override |
-| `visible` | `false` | Start visible |
+| `visible` | `true` | Start visible. Set `false` only if you also keep `toggleKey`, or the panel can never be reached. |
+| `toggleKey` | `{ key: 'D', shift: true }` | Shortcut bound on mount to show/hide. `false` to own the gesture yourself. |
 | `theme` | `'zinc'` | `'zinc'` · `'slate'` · `'light'` |
 | `themeVars` | — | CSS custom-property overrides |
 | `liquidGlass` | `false` | `true` · `'light'` |
@@ -533,6 +547,8 @@ Or override directly in CSS:
 | `materialsPanel` | `true` | Add the materials palette under the Outliner (Three.js hosts) |
 | `scene` · `camera` · `renderer` · `controls` | — | Three.js handles. Trigger the 3D workflow automatically. |
 | `autoRegister` | `true` | Auto-scan and register scene objects |
+| `cameraControl` | `'auto'` | Built-in free camera. `'auto'` mounts it only when you didn't pass `controls`; `true` takes the camera on mount; `false` opts out. |
+| `onCameraTakeover` | — | `(active) => {}`. Stop writing the camera in your render loop while `active` is `true`. |
 | `workflow` | `'auto'` | `'3d'` · `'animation'` · `'web'` · `'2d'` · `'audio'` · `'shader'` · `'ascii'` · `'auto'` · array |
 | `workflowOpts` | `{}` | Per-workflow opts forwarded to that workflow's setup |
 
@@ -543,7 +559,9 @@ Or override directly in CSS:
 | `ui.panel` · `ui.scenePanel` | Underlying `Panel` instances. `addFolder`, `getFolder`, `setLiquidGlass`, `setTheme`, etc. |
 | `ui.addFolder(name, opts?)` | Shortcut for `ui.panel.addFolder(...)` |
 | `ui.show()` · `ui.hide()` · `ui.toggle()` · `ui.isVisible()` | Visibility control |
-| `ui.bindToggleKey(key, mods?)` | Global toggle shortcut |
+| `ui.bindToggleKey(key, mods?)` | Bind an additional global toggle shortcut |
+| `ui.toggleKeys` | Chords currently bound to show/hide, e.g. `['Shift+D']` |
+| `ui.cameraControl` | Free-camera handle: `enable()`, `disable()`, `toggle()`, `isActive`, `controls`. `null` when the host owns the camera or `cameraControl: false`. |
 | `ui.objectManager` | `SceneObjectManager` (Three.js) or generic `ObjectManager`. Has `register`, `select`, `remove`, `on('change' \| 'select' \| 'register' \| 'remove')`, etc. |
 | `ui.materials` | Materials palette handle: `create`, `select`, `remove`, `assign`, `assignToSelection`, `getMaterials`, `setFilter`, `refresh`, `active`. `null` on non-Three hosts. |
 | `ui.refreshMaterials()` | Re-scan the scene for materials and redraw the swatches |

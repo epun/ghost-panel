@@ -11,7 +11,7 @@
  *     .addSlider('Speed', { min: 0, max: 10, value: 1, onChange: v => obj.speed = v })
  *     .addColor('Tint',   { value: '#fff', onChange: c => obj.tint = c })
  *     .addButton('Reset', () => obj.reset());
- *   ui.bindToggleKey('D', { shift: true });
+ *   // Shift+D toggles the panel out of the box; bindToggleKey() adds more chords.
  *
  *   // Three.js mode — pass scene/camera/renderer/controls and you get a
  *   // gizmo-driven object manager + a left "Scene" panel automatically.
@@ -34,6 +34,7 @@ import { ObjectManager } from './object-manager.js';
 import { createGizmoSystem } from './gizmos.js';
 import { attachContextualInspector } from './contextual.js';
 import { attachMaterialsPalette } from './materials.js';
+import { attachCameraControl } from './camera-control.js';
 import { ModalTransform, Modal2DTransform } from './modal-transform.js';
 import { Gizmo2D } from './gizmo-2d.js';
 import { UndoStack } from './undo-stack.js';
@@ -193,11 +194,32 @@ function uniqueName(om, baseName) {
   return `${root} copy ${Date.now()}`;
 }
 
+/** "Shift+D" / "Ctrl+Alt+G" — used in the mount notice and diagnostics copy. */
+function describeChord(key, { shift, ctrl, meta, alt } = {}) {
+  const parts = [];
+  if (ctrl)  parts.push('Ctrl');
+  if (meta)  parts.push('Cmd');
+  if (alt)   parts.push('Alt');
+  if (shift) parts.push('Shift');
+  parts.push(String(key).toUpperCase());
+  return parts.join('+');
+}
+
 export function createGhostPanel(opts = {}) {
   const {
     title = 'Ghost Panel',
     width,
-    visible = false,
+    // Panels mount VISIBLE by default. They used to mount hidden, which —
+    // combined with the toggle key not being bound — meant a textbook-correct
+    // integration produced a completely unreachable tool and no error. See
+    // `toggleKey` below: between the two, there is always a way in.
+    visible = true,
+    // Keyboard shortcut that shows/hides the panels, bound automatically on
+    // mount. The README has always advertised Shift+D; until now the binding
+    // was something the host had to make itself by calling ui.bindToggleKey().
+    // Pass `toggleKey: false` to own the shortcut yourself, or an object like
+    // { key: 'G', shift: true, alt: true } to move it.
+    toggleKey = { key: 'D', shift: true },
     // Theming
     theme,       // 'zinc' (default) | 'light'
     themeVars,   // object of CSS variable overrides (HSL components, e.g. { '--primary': '142 76% 36%' })
@@ -219,6 +241,20 @@ export function createGhostPanel(opts = {}) {
     gizmo = true,
     onDraggingChanged,
     beforeGizmoAttach,
+    // Built-in free camera (Three.js mode). 'auto' — the default — mounts our
+    // own orbit controls ONLY when the host didn't pass `controls` of its own,
+    // and leaves them dormant until something asks for the camera. `true`
+    // takes the camera the moment the panel mounts; `false` opts out entirely.
+    //
+    // Bound to document.body rather than the canvas, so it still works on
+    // pages where the WebGL canvas is underneath scroll runways, HUDs or
+    // overlay canvases — the usual reason "the panel can't move the camera".
+    cameraControl = 'auto',
+    // Fired when the built-in camera takes over (true) and releases (false).
+    // Hosts whose render loop writes the camera every frame — scroll-driven
+    // scenes, camera-path players — must pause that while active is true,
+    // otherwise the free camera is overwritten before it can be seen.
+    onCameraTakeover,
     // Scene panel — defaults to true so every host gets the canonical
     // "Outliner on the left, Inspector on the right" layout out of the
     // box. Hosts can pass `scenePanel: false` to opt out (e.g. tiny
@@ -279,6 +315,7 @@ export function createGhostPanel(opts = {}) {
   let sceneObjectsView = null;
   let gizmos = null;
   const toggleKeyHandlers = [];   // window keydown listeners to remove on dispose (#15)
+  const boundToggleKeys = [];     // human-readable chords, for diagnostics + the console notice
   if (scene && camera && renderer) {
     objectManager = new SceneObjectManager({ scene, camera, renderer, controls });
     // Host-configurable gizmo behavior (see opts above).
@@ -368,9 +405,28 @@ export function createGhostPanel(opts = {}) {
   // Main-panel save/load is wired AFTER `ui` is defined (below) so the
   // ExportMenu can reference live ui state (active workflows, scene, etc.).
 
+  /**
+   * Mirror panel visibility onto the geometry we add to the host's scene.
+   * Guarded so it's a no-op for 2D / DOM hosts, and so a Three.js host whose
+   * manager hasn't finished its async init yet doesn't throw.
+   */
+  function setSceneHelpersVisible(v) {
+    try { objectManager?.setHelpersVisible?.(v); } catch (e) { log.debug('index', 'setHelpersVisible failed:', e); }
+    try { gizmos?.setVisible?.(v); } catch (e) { log.debug('index', 'gizmo setVisible failed:', e); }
+  }
+
   // Bind a keyboard shortcut for toggling visibility.
   function bindToggleKey(key, mods = {}) {
     const { shift = false, ctrl = false, meta = false, alt = false } = mods;
+    // Idempotent by chord. Ghost Panel now binds Shift+D itself, and the
+    // README told hosts to bind it too — without this guard those hosts get
+    // two listeners, the panel toggles twice per press, and the shortcut
+    // silently does nothing.
+    const chord = describeChord(key, { shift, ctrl, meta, alt });
+    if (boundToggleKeys.includes(chord)) {
+      log.debug('index', `${chord} is already bound to toggle — ignoring duplicate bindToggleKey().`);
+      return;
+    }
     // We accept the configured modifier combo AND, as a convenience, also
     // fire on Cmd+<key> (Mac) / Ctrl+<key> (Windows / Linux). Cmd+D would
     // otherwise pop the browser's bookmark dialog — preventDefault stops
@@ -386,20 +442,35 @@ export function createGhostPanel(opts = {}) {
       if (!exact && !cmdAccel) return;
       e.preventDefault();
       panel.toggle();
+      const on = panel.isVisible();
       if (leftPanel) {
-        if (panel.isVisible()) leftPanel.show();
+        if (on) leftPanel.show();
         else leftPanel.hide();
       }
+      setSceneHelpersVisible(on);
     };
     window.addEventListener('keydown', onToggleKey);
     // Tracked so dispose() can remove it — a leaked listener pointing at a
     // torn-down panel breaks React StrictMode double-mounts. See issue #15.
     toggleKeyHandlers.push(onToggleKey);
+    boundToggleKeys.push(chord);
+  }
+
+  // Bind the advertised shortcut ourselves. A host that wants the gesture for
+  // something else passes `toggleKey: false` and calls bindToggleKey() (or
+  // show()/hide()) on its own terms.
+  if (toggleKey) {
+    const { key = 'D', ...chordMods } = (typeof toggleKey === 'string')
+      ? { key: toggleKey, shift: true }
+      : toggleKey;
+    bindToggleKey(key, chordMods);
   }
 
   function update() {
     // Called from the user's render loop. Syncs UI with live scene state.
     if (cameraFolder && panel.isVisible()) cameraFolder.update();
+    // Damping + the "host is overwriting the camera" detector both need a tick.
+    ui?.cameraControl?.update();
     syncFolderVisibility();
   }
   function syncFolderVisibility() {
@@ -494,12 +565,22 @@ export function createGhostPanel(opts = {}) {
     // Add controls directly to the main panel
     addFolder: (name, opts) => panel.addFolder(name, opts),
     getFolder: (name) => panel.getFolder(name),
-    // Visibility
-    show: () => { panel.show(); leftPanel?.show(); },
-    hide: () => { panel.hide(); leftPanel?.hide(); },
-    toggle: () => { panel.toggle(); if (leftPanel) (panel.isVisible() ? leftPanel.show() : leftPanel.hide()); },
+    // Visibility. Hidden means hidden everywhere: the panels leave the DOM
+    // view AND the helpers we drew into the host's scene (transform gizmo,
+    // light/camera visualizers) stop rendering, so a hidden inspector leaves
+    // no stray lines in a production view or a screenshot.
+    show: () => { panel.show(); leftPanel?.show(); setSceneHelpersVisible(true); },
+    hide: () => { panel.hide(); leftPanel?.hide(); setSceneHelpersVisible(false); },
+    toggle: () => {
+      panel.toggle();
+      const on = panel.isVisible();
+      if (leftPanel) (on ? leftPanel.show() : leftPanel.hide());
+      setSceneHelpersVisible(on);
+    },
     isVisible: () => panel.isVisible(),
     bindToggleKey,
+    /** Chords currently bound to show/hide, e.g. ['Shift+D']. Read-only. */
+    get toggleKeys() { return boundToggleKeys.slice(); },
     // Three.js (only set when scene/camera/renderer provided)
     objectManager,
     gizmos,
@@ -539,10 +620,24 @@ export function createGhostPanel(opts = {}) {
       // handlers, none of which were being removed before. See issue #15 / §6.
       gizmos?.dispose();
       ui.materials?.dispose();
+      ui.cameraControl?.dispose();
       toggleKeyHandlers.forEach(h => window.removeEventListener('keydown', h));
       if (ui._undoKeyHandler) window.removeEventListener('keydown', ui._undoKeyHandler);
     },
   };
+
+  // Mounting hidden must not leave inspector geometry rendering either.
+  if (!panel.isVisible()) setSceneHelpersVisible(false);
+
+  // A panel that mounts hidden with no shortcut bound cannot be reached by
+  // anyone who hasn't read the source: it can't show itself and the user can't
+  // ask it to. Both defaults now rule that out, but a host can still opt into
+  // it explicitly, so say so once instead of failing silently.
+  if (!panel.isVisible() && boundToggleKeys.length === 0) {
+    log.warn('index',
+      'Panels mounted hidden with no toggle key bound — nothing will appear on screen. ' +
+      'Call ui.show(), pass { visible: true }, or bind a shortcut with { toggleKey: { key: "D", shift: true } }.');
+  }
 
   // Back-link so callers buried inside the outliner / contextual layer
   // (which were built before `ui` existed) can reach `ui._undo`,
@@ -649,8 +744,49 @@ export function createGhostPanel(opts = {}) {
 
   // ── Contextual inspector (mode toolbar + material on selection) ──
   // Now that `ui` exists with objectManager, attach the contextual layer.
+  // Guarded: an optional layer that throws must not take the whole panel down
+  // with it. A half-featured inspector is recoverable; a createGhostPanel()
+  // that throws leaves the host with nothing and no obvious cause.
   if (objectManager) {
-    ui._contextualInspector = attachContextualInspector(ui);
+    try { ui._contextualInspector = attachContextualInspector(ui); }
+    catch (e) { log.error('index', 'attachContextualInspector failed:', e); }
+  }
+
+  // ── Free camera ───────────────────────────────────────────────────────
+  // Attached after the object manager so the takeover can pause the host's
+  // controls. Dormant under 'auto' until ui.cameraControl.enable() is called
+  // (the Camera folder's "Free camera" toggle does exactly that).
+  if (scene && camera && renderer && cameraControl !== false) {
+    const hostOwnsCamera = !!controls;
+    if (cameraControl === true || !hostOwnsCamera) {
+      try {
+        ui.cameraControl = attachCameraControl(ui, {
+          camera, scene, renderer, controls,
+          onCameraTakeover,
+        });
+        if (cameraControl === true) ui.cameraControl?.enable();
+        addFreeCameraToggle();
+      } catch (e) {
+        log.error('index', 'attachCameraControl failed:', e);
+      }
+    }
+  }
+
+  /**
+   * A discoverable switch for the free camera. Without it the takeover is only
+   * reachable from code, which is the same trap that made the panel itself
+   * unreachable — the affordance has to exist in the UI.
+   */
+  function addFreeCameraToggle() {
+    const host = leftPanel || panel;
+    if (!host || !ui.cameraControl) return;
+    const folder = host.getFolder('View') || host.addFolder('View', { collapsed: true });
+    folder.addCheckbox('Free camera', {
+      value: !!ui.cameraControl.isActive,
+      tooltip: 'Orbit, pan and zoom with the mouse. Pauses the host\'s own camera controls while on.',
+      undo: false,
+      onChange: (on) => { if (on) ui.cameraControl?.enable(); else ui.cameraControl?.disable(); },
+    });
   }
 
   // ── Modal transform — Blender-style G/R/S + X/Y/Z keyboard shortcuts ──
@@ -958,7 +1094,8 @@ export function createGhostPanel(opts = {}) {
 
   // ── Canvas context menu (right-click) — 3D scene only ──
   if (scene && camera && renderer && objectManager) {
-    ui._canvasContextMenu = attachCanvasContextMenu(ui);
+    try { ui._canvasContextMenu = attachCanvasContextMenu(ui); }
+    catch (e) { log.error('index', 'attachCanvasContextMenu failed:', e); }
   }
 
   // ── Learning store ──
@@ -966,7 +1103,8 @@ export function createGhostPanel(opts = {}) {
   // proposals in a "Learning" folder, and (when the Vite plugin is mounted)
   // writes the fix straight back to the source file. Self-strips in
   // production via `isDev()`.
-  attachLearning(ui);
+  try { attachLearning(ui); }
+  catch (e) { log.error('index', 'attachLearning failed:', e); }
 
   // ── Context-aware export menu — wired AFTER ui exists ──
   // The download icon (↓) in the panel header now opens a popover listing
@@ -1127,6 +1265,7 @@ export { Panel } from './panel.js';
 export { Folder } from './folder.js';
 export * as controls from './controls.js';
 export { SceneObjectManager, addSceneObjectsFolder, addCameraFolder, autoRegisterScene } from './three-extensions.js';
+export { attachCameraControl } from './camera-control.js';
 export { createGizmoSystem, gizmoFactories } from './gizmos.js';
 export { attachMaterialsPalette, assignMaterial, collectSceneMaterials,
          materialLabel, materialSignature, slotForIntersection, groupIndexForFace,
