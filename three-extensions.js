@@ -575,6 +575,12 @@ export class SceneObjectManager {
     if (v) {
       this._helperVisibility?.forEach((visible, obj) => { obj.visible = visible; });
       this._helperVisibility = null;
+      // The gizmo is the one helper whose visibility is derived, not stored:
+      // the selection can change while the panels are hidden, which makes the
+      // snapshot stale. Replaying it would strand the gizmo off for an object
+      // that IS selected (select an object while hidden, then show). Re-derive
+      // it from what the gizmo is actually attached to instead.
+      if (this.gizmo) this.gizmo.getHelper().visible = !!this.gizmo.object;
       return;
     }
     this._helperVisibility = this._helperVisibility || new Map();

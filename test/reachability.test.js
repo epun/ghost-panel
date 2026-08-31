@@ -118,7 +118,9 @@ describe('scene helper suppression', () => {
     const lampHelper = { visible: true };
     const camHelper = { visible: false };     // host deliberately switched this off
     const om = helpers({
-      gizmo: { getHelper: () => gizmoHelper },
+      // `object` is what TransformControls is attached to — the gizmo is only
+      // visible when something is selected.
+      gizmo: { object: { name: 'Cube' }, getHelper: () => gizmoHelper },
       objects: { Lamp: { helper: lampHelper }, POV: { helper: camHelper }, Mesh: {} },
     });
 
@@ -129,6 +131,30 @@ describe('scene helper suppression', () => {
     expect(gizmoHelper.visible).toBe(true);
     expect(lampHelper.visible).toBe(true);
     expect(camHelper.visible).toBe(false);    // stays off — it was never ours to turn on
+  });
+
+  it('re-derives gizmo visibility from the selection made while hidden', () => {
+    // Selecting an object with the panels hidden used to strand the gizmo off
+    // on show(): the snapshot was taken when nothing was selected, and
+    // restoring replayed that stale `false` over a live selection.
+    const gizmoHelper = { visible: false };   // nothing selected at hide time
+    const gizmo = { object: null, getHelper: () => gizmoHelper };
+    const om = helpers({ gizmo, objects: {} });
+
+    om.setHelpersVisible(false);
+    gizmo.object = { name: 'Cube' };          // user selects while hidden
+    expect(gizmoHelper.visible).toBe(false);  // ...and nothing appears in the scene
+
+    om.setHelpersVisible(true);
+    expect(gizmoHelper.visible).toBe(true);
+  });
+
+  it('leaves the gizmo hidden on restore when nothing is selected', () => {
+    const gizmoHelper = { visible: false };
+    const om = helpers({ gizmo: { object: null, getHelper: () => gizmoHelper }, objects: {} });
+    om.setHelpersVisible(false);
+    om.setHelpersVisible(true);
+    expect(gizmoHelper.visible).toBe(false);
   });
 
   it('suppresses helpers registered while hidden', () => {
