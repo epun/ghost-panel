@@ -46,6 +46,7 @@
     "./svelte": "./adapters/svelte.js",
     "./vue": "./adapters/vue.js",
     "./animation": "./animation.js",
+    "./camera-control": "./camera-control.js",
     "./exports": "./exports.js",
     "./materials": "./materials.js",
     "./skills": "./skills.js",

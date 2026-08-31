@@ -81,6 +81,7 @@ export class DiagnosticEngine {
     this._checkWorkflow(issues);
     this._checkSceneObjects(issues, pass);
     this._checkUpdateLoop(issues, pass);
+    this._checkReachable(issues);
     this._checkPanelEmpty(issues, pass);
     this._checkErrors(issues);
     this._checkAccessibility(issues, pass);
@@ -237,6 +238,28 @@ export class DiagnosticEngine {
         codeHint: `function animate() {\n  requestAnimationFrame(animate);\n  renderer.render(scene, camera);\n  ui.update(); // ← add this\n}\nanimate();`,
       });
     }
+  }
+
+  /**
+   * The panel is mounted but nothing can bring it on screen: it starts hidden
+   * AND no shortcut is bound. Every other signal reports success, so this is
+   * the one failure that reads exactly like a correct integration. Checked on
+   * every pass — a host can hide the panel at any point.
+   */
+  _checkReachable(issues) {
+    const visible = this.ui.isVisible?.() ?? true;
+    const keys = this.ui.toggleKeys ?? [];
+    if (visible || keys.length > 0) return;
+    issues.push({
+      id: 'panel-unreachable',
+      level: 'error',
+      title: 'Panels are hidden with no way to show them',
+      detail: 'Both panels are mounted with display:none and no toggle shortcut is bound, ' +
+        'so nothing will ever appear on screen. Show them, or bind a key.',
+      fix: 'reveal-panel',
+      autoFixable: false,
+      codeHint: `const ui = createGhostPanel({ scene, camera, renderer });\nui.show();                       // ← or pass { visible: true }\n// or keep it hidden and open it with a shortcut:\n// createGhostPanel({ toggleKey: { key: 'D', shift: true } })`,
+    });
   }
 
   _checkPanelEmpty(issues, pass) {

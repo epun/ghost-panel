@@ -72,6 +72,8 @@ export class SceneObjectManager {
     }
     this.scene.add(this.gizmo.getHelper());
     this.gizmo.getHelper().visible = false;
+    // _init is async: the host may have called hide() before we got here.
+    this._suppressHelper(this.gizmo.getHelper());
 
     // Blender-style colors: red=X, green=Y, blue=Z, yellow=selected, white=center.
     // TransformControls renders sub-gizmos under .gizmo.gizmo.{translate,rotate,scale};
@@ -353,6 +355,7 @@ export class SceneObjectManager {
     else if (type === 'SpotLight')    helper = new THREE.SpotLightHelper(light);
     else if (type === 'HemisphereLight') helper = new THREE.HemisphereLightHelper(light, 0.3);
     if (helper) this.scene.add(helper);
+    this._suppressHelper(helper);
     this.objects[name] = { object: light, helper, kind: 'light' };
     // Update helper each frame to track light movement
     if (helper && helper.update) {
@@ -386,6 +389,7 @@ export class SceneObjectManager {
     // restores visibility when looking through a different camera.
     if (camera === this.camera) helper.visible = false;
     this.scene.add(helper);
+    this._suppressHelper(helper);
     let target = camera;
     if (opts.attachTransformProxy) {
       const proxy = new THREE.Object3D();
@@ -511,7 +515,7 @@ export class SceneObjectManager {
       const primary = this.objects[this.activeName]?.object;
       if (primary) {
         this.gizmo.attach(primary);
-        this.gizmo.getHelper().visible = true;
+        this.gizmo.getHelper().visible = !this._helpersSuppressed;
         this.gizmo.setMode(this.currentMode);
       } else {
         this.gizmo.detach();
@@ -555,6 +559,47 @@ export class SceneObjectManager {
   }
   setSpace(space) { if (this.gizmo) this.gizmo.setSpace(space); }
   setVisible(v) { if (this.gizmo) this.gizmo.getHelper().visible = v && !!this.activeName; }
+
+  /**
+   * Show/hide everything this manager draws INTO the host's scene — the
+   * transform gizmo plus the light/camera visualizer helpers.
+   *
+   * Hiding the panels used to be a DOM-only affair, so a "hidden" inspector
+   * still painted stray helper lines across the scene — visible in production
+   * views and screenshots. hide() now routes through here, and show() restores
+   * exactly the helpers that were on before, never the ones the host had
+   * deliberately switched off (e.g. the main viewport camera's own helper).
+   */
+  setHelpersVisible(v) {
+    this._helpersSuppressed = !v;
+    if (v) {
+      this._helperVisibility?.forEach((visible, obj) => { obj.visible = visible; });
+      this._helperVisibility = null;
+      // The gizmo is the one helper whose visibility is derived, not stored:
+      // the selection can change while the panels are hidden, which makes the
+      // snapshot stale. Replaying it would strand the gizmo off for an object
+      // that IS selected (select an object while hidden, then show). Re-derive
+      // it from what the gizmo is actually attached to instead.
+      if (this.gizmo) this.gizmo.getHelper().visible = !!this.gizmo.object;
+      return;
+    }
+    this._helperVisibility = this._helperVisibility || new Map();
+    if (this.gizmo) this._suppressHelper(this.gizmo.getHelper());
+    Object.values(this.objects).forEach(entry => this._suppressHelper(entry?.helper));
+  }
+
+  /**
+   * Hide one helper and remember what it was, if suppression is active.
+   * Called from setHelpersVisible and from every site that creates a helper,
+   * so a light registered while the panels are hidden doesn't pop into view.
+   */
+  _suppressHelper(obj) {
+    if (!obj || !this._helpersSuppressed) return;
+    if (!this._helperVisibility) this._helperVisibility = new Map();
+    if (this._helperVisibility.has(obj)) return;
+    this._helperVisibility.set(obj, obj.visible);
+    obj.visible = false;
+  }
 
   getNames() { return Object.keys(this.objects); }
   getObject(name) { return this.objects[name]?.object || null; }
