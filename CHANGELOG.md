@@ -49,6 +49,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Agent control over MCP.** `npx ghost-panel-mcp` bridges an MCP client to a
+  live panel: 8 read tools (catalog, scene tree, objects, materials, panel
+  state, diagnostics, screenshot) and 9 bounded writes (select, transform,
+  panel controls, apply skill, assign material, camera, focus, undo, redo).
+  Opt in from the page with `attachMCPBridge(ui, { token })`.
+  - Writes go through the same public API a click would, so an agent's edit
+    lands on the shared undo stack and the user can Cmd+Z it.
+  - `register_skill` is deliberately not exposed: a skill carries `apply()` and
+    `teardown()` bodies, so registering one remotely is arbitrary code
+    execution in the user's browser.
+  - Loopback-only and opt-in, with `readOnly` and a `confirm(tool, args)` hook
+    for hosts that want inspection only or a human in the loop. `confirm` gates
+    mutations only — reads are never held up for approval.
+  - Each call is routed to a single page rather than broadcast, so two open tabs
+    don't both apply the same write.
+  - Transport is SSE down and `fetch` up, so the browser library keeps its zero
+    runtime dependencies; the MCP SDK is an optional, server-only dependency.
+- Control handles expose `_onChange`, the undo-wrapped committed handler, so
+  anything driving a control programmatically completes the round trip instead
+  of repainting the widget while the host hears nothing.
+
+### Added
+
 - Materials palette in the Scene panel: every scene material as a rendered
   sphere swatch, filtered by All / Unused / Active Object.
 - Clicking a swatch opens that material's properties in the Inspector, bound

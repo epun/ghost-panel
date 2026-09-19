@@ -477,6 +477,52 @@ transport.play();
 
 ---
 
+## Agent control over MCP
+
+Point Claude Code — or any MCP client — at a running panel and let it read the
+scene and drive it. The bridge is opt-in, loopback-only, and dev-only.
+
+```bash
+npm install @modelcontextprotocol/sdk   # optional dependency, server-side only
+npx ghost-panel-mcp                     # prints a token
+```
+
+```js
+import { attachMCPBridge } from 'ghost-panel/mcp-bridge';
+
+const ui = createGhostPanel({ scene, camera, renderer });
+if (import.meta.env.DEV) attachMCPBridge(ui, { token: 'paste-from-the-server' });
+```
+
+Register it with your client — for Claude Code, `claude mcp add ghost-panel -- npx ghost-panel-mcp`.
+
+**Reads:** `describe_skills` · `suggest_skills` · `get_scene_tree` · `get_object` ·
+`list_materials` · `get_panel_state` · `get_diagnostics` · `screenshot`
+
+**Writes:** `select_object` · `set_transform` · `set_control` · `apply_skill` ·
+`assign_material` · `set_camera` · `focus_object` · `undo` · `redo`
+
+Every write goes through the same public API a click would, so an agent's edit
+lands on your undo stack and you can Cmd+Z it. Nothing ships executable code
+into the page: `register_skill` is deliberately absent from the MCP surface,
+because a skill carries `apply()`/`teardown()` bodies and registering one
+remotely would be arbitrary code execution in your browser.
+
+| Option | Default | Description |
+|---|---|---|
+| `url` | `http://127.0.0.1:7391` | Bridge origin. Loopback addresses only — anything else throws. |
+| `token` | — | Shared token printed by the server. Omit only with `--no-token`. |
+| `readOnly` | `false` | Expose the panel for inspection and refuse every write. |
+| `confirm` | — | `(tool, args) => boolean`. Called before each **mutating** tool; return `false` to veto it. Reads are never gated. |
+
+`ui.mcp` carries the handle: `connected`, `readOnly`, `url`, `dispose()`.
+
+The transport is Server-Sent Events down, `fetch` back up — both built into the
+browser, so the library still ships with no runtime dependencies. Only the Node
+server needs the MCP SDK, and it's an optional dependency.
+
+---
+
 ## Keyboard
 
 | Key | Action |
@@ -565,6 +611,7 @@ Or override directly in CSS:
 | `ui.objectManager` | `SceneObjectManager` (Three.js) or generic `ObjectManager`. Has `register`, `select`, `remove`, `on('change' \| 'select' \| 'register' \| 'remove')`, etc. |
 | `ui.materials` | Materials palette handle: `create`, `select`, `remove`, `assign`, `assignToSelection`, `getMaterials`, `setFilter`, `refresh`, `active`. `null` on non-Three hosts. |
 | `ui.refreshMaterials()` | Re-scan the scene for materials and redraw the swatches |
+| `ui.mcp` | MCP bridge handle when `attachMCPBridge()` is used: `connected`, `readOnly`, `url`, `dispose()` |
 | `ui.activeWorkflows` | Array of active workflow ids |
 | `ui.enableWorkflow(name, opts)` · `ui.disableWorkflow(name)` | Manual workflow control |
 | `ui.rescan()` | Force a re-scan of the scene + workflow detection (also runs automatically on register/remove) |

@@ -196,6 +196,13 @@ export class Folder {
    *  called on undo/redo. Called after the factory returns. */
   _bindUndo(opts, handle) {
     if (opts?.__undoBind) opts.__undoBind.current = handle;
+    // Expose the control's committed handler on the handle. setValue() alone
+    // repaints the widget without telling the host anything — the "control
+    // looks wired but isn't" trap — so anything driving a control
+    // programmatically (tests, the MCP bridge, automation) needs this to
+    // complete the round trip. It's the WRAPPED handler, so a programmatic
+    // change records undo exactly like a user's drag.
+    if (handle && typeof opts?.onChange === 'function') handle._onChange = opts.onChange;
     // Optional live read-back: if the caller bound this control to an object
     // property (`read: () => obj.scale.x`), expose it so exports snapshot the
     // LIVE value instead of the stale cached UI value. See issue #13 / §4.1.
