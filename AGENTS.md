@@ -4,6 +4,52 @@ This document tells an AI agent (LLM, automation script, MCP server) how to
 discover and modify the Ghost Panel tool's capabilities at runtime. It's
 intentionally short and machine-targeted.
 
+## Two ways in
+
+**In-page (this document).** Your code already runs in the browser alongside
+Ghost Panel — a devtools snippet, the host app, a Vite plugin. Use `ui.skills`
+and the rest of the `ui` handle directly. Everything below describes this path.
+
+**Over MCP (`ghost-panel-mcp`).** You are an external agent — Claude Code, an
+editor assistant — and the panel is in a browser you cannot reach. Run the
+bridge and you get a bounded tool surface over stdio:
+
+```bash
+npm install @modelcontextprotocol/sdk    # optional dep, server-side only
+npx ghost-panel-mcp                      # prints a token
+```
+
+```js
+import { attachMCPBridge } from 'ghost-panel/mcp-bridge';
+if (import.meta.env.DEV) attachMCPBridge(ui, { token: '<printed token>' });
+```
+
+Seventeen tools, defined once in `mcp/tools.js`: reads (`describe_skills`,
+`suggest_skills`, `get_scene_tree`, `get_object`, `list_materials`,
+`get_panel_state`, `get_diagnostics`, `screenshot`) and bounded writes
+(`select_object`, `set_transform`, `set_control`, `apply_skill`,
+`assign_material`, `set_camera`, `focus_object`, `undo`, `redo`).
+
+What the MCP surface deliberately does NOT expose is `register_skill`. A skill
+carries `apply()` and `teardown()` function bodies, so registering one from
+outside the page is arbitrary code execution in the user's browser. Writing a
+new skill is an in-page job — generate the code, let the developer read it, and
+load it through their own build.
+
+Two properties worth relying on:
+
+- **Agent edits are undoable.** `set_control` drives the control's committed
+  handler, not just `setValue()`, so it lands on the same undo stack as a
+  user's drag. `set_transform` pushes its own entry. The user can Cmd+Z you.
+- **Errors are actionable, not silent.** A wrong object name lists the names
+  that exist; a non-numeric axis is refused rather than written as `NaN`; a
+  control with no handler is refused rather than reported as changed. See the
+  pitfall ledger below — this is the same class of bug, viewed from the
+  writing side.
+
+Hosts that want inspection without control pass `{ readOnly: true }`; hosts
+that want a human in the loop pass `{ confirm: (tool, args) => boolean }`.
+
 ## The mental model
 
 A **skill** is a self-contained unit of UI + behavior — e.g. *Material
