@@ -16,6 +16,7 @@
  * Then point your MCP client at `npx ghost-panel-mcp`.
  */
 import { runCommand, CommandError } from './mcp-commands.js';
+import { WRITE_TOOLS } from './mcp/tools.js';
 import { log } from './log.js';
 
 const DEFAULT_URL = 'http://127.0.0.1:7391';
@@ -69,11 +70,10 @@ export function attachMCPBridge(ui, opts = {}) {
 
     const { id, tool, args } = msg;
     try {
-      if (confirm && !readOnly) {
-        const spec = { tool, args };
-        if (confirm(tool, args) === false) {
-          throw new CommandError(`The host refused ${tool}.`, spec);
-        }
+      // Writes only. Asking a human to approve get_scene_tree would make the
+      // hook unusable, and the option is documented as gating mutations.
+      if (confirm && !readOnly && WRITE_TOOLS.includes(tool)) {
+        if (confirm(tool, args) === false) throw new CommandError(`The host refused ${tool}.`);
       }
       const result = runCommand(ui, tool, args || {}, { readOnly });
       reply(id, { ok: true, result });

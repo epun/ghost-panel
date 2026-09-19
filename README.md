@@ -513,7 +513,7 @@ remotely would be arbitrary code execution in your browser.
 | `url` | `http://127.0.0.1:7391` | Bridge origin. Loopback addresses only — anything else throws. |
 | `token` | — | Shared token printed by the server. Omit only with `--no-token`. |
 | `readOnly` | `false` | Expose the panel for inspection and refuse every write. |
-| `confirm` | — | `(tool, args) => boolean`. Return `false` to veto a write — a human-in-the-loop hook. |
+| `confirm` | — | `(tool, args) => boolean`. Called before each **mutating** tool; return `false` to veto it. Reads are never gated. |
 
 `ui.mcp` carries the handle: `connected`, `readOnly`, `url`, `dispose()`.
 

@@ -110,15 +110,25 @@ function callPage(tool, args) {
   }
   const id = randomUUID();
   const frame = `data: ${JSON.stringify({ type: 'call', id, tool, args })}\n\n`;
+  // Route to ONE page — the most recently connected. Broadcasting would run
+  // every write in every open tab: two tabs on the same app means the
+  // transform is applied twice, and the first answer back hides it. A reload
+  // closes the old event stream, so "newest" is the tab you are looking at.
+  const target = [...clients].at(-1);
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
       reject(new Error(`${tool} timed out after ${CALL_TIMEOUT_MS}ms. Is the tab backgrounded or paused in the debugger?`));
     }, CALL_TIMEOUT_MS);
     pending.set(id, { resolve, reject, timer });
-    // Broadcast: with several tabs open the first to answer wins, which is the
-    // behaviour you want when you reload the page mid-session.
-    for (const c of clients) { try { c.write(frame); } catch { clients.delete(c); } }
+    try {
+      target.write(frame);
+    } catch {
+      clients.delete(target);
+      clearTimeout(timer);
+      pending.delete(id);
+      reject(new Error('The connected page went away mid-call. Reload it and retry.'));
+    }
   });
 }
 

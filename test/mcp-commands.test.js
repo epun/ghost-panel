@@ -185,6 +185,24 @@ describe('read-only mode', () => {
   });
 });
 
+describe('the confirm() veto gates writes only', () => {
+  // The hook is documented as gating mutations. An implementation that also
+  // asked about get_scene_tree would make it unusable in practice, so the
+  // split is part of the contract, not an optimisation.
+  it('classifies every tool as read or write, with no overlap', () => {
+    const reads = TOOLS.filter(t => t.readOnly).map(t => t.name);
+    expect(reads.length + WRITE_TOOLS.length).toBe(TOOLS.length);
+    expect(reads.filter(n => WRITE_TOOLS.includes(n))).toEqual([]);
+  });
+
+  it('lists the mutating tools a host would be asked to approve', () => {
+    expect(WRITE_TOOLS).toEqual([
+      'select_object', 'set_transform', 'set_control', 'apply_skill',
+      'assign_material', 'set_camera', 'focus_object', 'undo', 'redo',
+    ]);
+  });
+});
+
 describe('hosts without the optional pieces', () => {
   it('explains a missing materials palette rather than throwing a TypeError', () => {
     delete ui.materials;

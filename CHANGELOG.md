@@ -60,7 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `teardown()` bodies, so registering one remotely is arbitrary code
     execution in the user's browser.
   - Loopback-only and opt-in, with `readOnly` and a `confirm(tool, args)` hook
-    for hosts that want inspection only or a human in the loop.
+    for hosts that want inspection only or a human in the loop. `confirm` gates
+    mutations only — reads are never held up for approval.
+  - Each call is routed to a single page rather than broadcast, so two open tabs
+    don't both apply the same write.
   - Transport is SSE down and `fetch` up, so the browser library keeps its zero
     runtime dependencies; the MCP SDK is an optional, server-only dependency.
 - Control handles expose `_onChange`, the undo-wrapped committed handler, so
