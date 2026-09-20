@@ -1,6 +1,6 @@
 {
   "name": "ghost-panel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Ghost Panel \u2014 workflow-aware inspector for Three.js / 2D canvas / web. Outliner, mini transform toolbar, graph editor, undo, copy/paste, exporters.",
   "keywords": [
@@ -63,9 +63,10 @@
     "dist",
     "adapters",
     "mcp",
-    "assets/branding",
     "*.js",
     "!vite.config.js",
+    "!vite.config.site.js",
+    "!vitest.config.js",
     "!ghost-panel-*.html",
     "README.md"
   ],
@@ -78,7 +79,7 @@
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "pack:tgz": "npm run build && npm pack",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm test && npm run build"
   },
   "peerDependencies": {
     "react": ">=18",

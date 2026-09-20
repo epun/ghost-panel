@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-20
+
+First release published to npm. Everything below shipped since the v0.1.0
+tag, which was tagged in git but never published to the registry.
+
 ### Fixed
 
 - Panels are reachable out of the box. They mounted hidden AND never bound the
@@ -96,4 +101,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vite library build (ESM, CJS, UMD) with optional `three` peer dependency.
 - Demo pages for 3D, 2D, web, and grid workflows.
 
+[0.2.0]: https://github.com/epun/ghost-panel/releases/tag/v0.2.0
 [0.1.0]: https://github.com/epun/ghost-panel/releases/tag/v0.1.0
