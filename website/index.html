@@ -277,6 +277,13 @@
       font-size: 15px;
       margin-bottom: 10px;
     }
+    .mcp-note {
+      border-left: 2px solid var(--line);
+      padding-left: 14px;
+      color: var(--fg-soft);
+      font-size: 14px;
+      margin-top: 28px;
+    }
     .api-table {
       width: 100%;
       border-collapse: collapse;
@@ -550,6 +557,7 @@
       <a href="#install">Install</a>
       <a href="#frameworks">Frameworks</a>
       <a href="#api-reference">API</a>
+      <a href="#mcp">Agents</a>
       <a href="#demos">Demos</a>
     </div>
   </nav>
@@ -582,10 +590,14 @@
   <!-- ═══ Install ═══════════════════════════════════════════════ -->
   <section id="install">
     <h2>Install</h2>
-    <pre>npm install ghost-panel
+    <p>Not published to npm yet — install from GitHub:</p>
+    <pre>npm install github:epun/ghost-panel
 npm install three     <span class="tok-cm"># peer dep, only if you're using Three.js</span></pre>
     <p>Or load the UMD bundle directly:</p>
-    <pre><span class="tok-tag">&lt;script</span> <span class="tok-prop">src</span>=<span class="tok-str">"https://unpkg.com/ghost-panel/dist/ghost-panel.umd.js"</span><span class="tok-tag">&gt;&lt;/script&gt;</span></pre>
+    <pre><span class="tok-tag">&lt;script</span> <span class="tok-prop">src</span>=<span class="tok-str">"https://cdn.jsdelivr.net/gh/epun/ghost-panel@main/dist/ghost-panel.umd.js"</span><span class="tok-tag">&gt;&lt;/script&gt;</span></pre>
+    <p><strong>Vite:</strong> add <code>three</code> to <code>resolve.dedupe</code> so your app and Ghost Panel share one Three.js instance — without it you get a duplicate-instance warning and <code>instanceof</code> checks that fail across the boundary.</p>
+    <pre><span class="tok-cm">// vite.config.js</span>
+<span class="tok-key">export default</span> { resolve: { dedupe: [<span class="tok-str">'three'</span>] } };</pre>
   </section>
 
   <!-- ═══ Quick start ═══════════════════════════════════════════ -->
@@ -694,6 +706,56 @@ npm install three     <span class="tok-cm"># peer dep, only if you're using Thre
       <div class="api-sig">ui.<span class="tok-fn">dispose</span>() → <span class="tok-fn">void</span></div>
       <div class="api-desc">Tear down every panel, listener, and observer. Safe to call multiple times.</div>
     </div>
+  </section>
+
+  <!-- ═══ Agent control (MCP) ══════════════════════════════════ -->
+  <section id="mcp">
+    <h2>Agent control (MCP)</h2>
+    <p>Point Claude Code — or any MCP client — at a running panel and let it read the scene and drive it. The bridge is opt-in, loopback-only, and dev-only: nothing is exposed unless you ask for it.</p>
+
+    <p><strong>1.</strong> Start the bridge. It prints a token.</p>
+    <pre>npm install @modelcontextprotocol/sdk   <span class="tok-cm"># optional dep, server-side only</span>
+npx ghost-panel-mcp</pre>
+
+    <p><strong>2.</strong> Attach it in your dev build.</p>
+    <pre><span class="tok-key">import</span> { <span class="tok-fn">attachMCPBridge</span> } <span class="tok-key">from</span> <span class="tok-str">'ghost-panel/mcp-bridge'</span>;
+
+<span class="tok-key">const</span> ui = <span class="tok-fn">createGhostPanel</span>({ scene, camera, renderer });
+
+<span class="tok-key">if</span> (import.meta.env.DEV) {
+  <span class="tok-fn">attachMCPBridge</span>(ui, { token: <span class="tok-str">'paste-from-the-server'</span> });
+}</pre>
+
+    <p><strong>3.</strong> Register it with your client.</p>
+    <pre>claude mcp add ghost-panel -- npx ghost-panel-mcp</pre>
+
+    <p>Your agent now has seventeen tools against the live page.</p>
+
+    <div class="api-block">
+      <div class="api-sig">Reads</div>
+      <div class="api-desc"><code>describe_skills</code> · <code>suggest_skills</code> · <code>get_scene_tree</code> · <code>get_object</code> · <code>list_materials</code> · <code>get_panel_state</code> · <code>get_diagnostics</code> · <code>screenshot</code></div>
+    </div>
+
+    <div class="api-block">
+      <div class="api-sig">Writes</div>
+      <div class="api-desc"><code>select_object</code> · <code>set_transform</code> · <code>set_control</code> · <code>apply_skill</code> · <code>assign_material</code> · <code>set_camera</code> · <code>focus_object</code> · <code>undo</code> · <code>redo</code></div>
+    </div>
+
+    <p>Every write goes through the same public API a click would, so an agent's edit lands on your undo stack and <kbd>Cmd+Z</kbd> takes it back. Nothing ships executable code into the page — <code>register_skill</code> is deliberately absent from the MCP surface, because a skill carries <code>apply()</code> and <code>teardown()</code> function bodies and registering one remotely would be arbitrary code execution in your browser.</p>
+
+    <div class="api-block">
+      <div class="api-sig"><span class="tok-fn">attachMCPBridge</span>(<span class="tok-prop">ui</span>, <span class="tok-prop">options</span>) → <span class="tok-fn">Bridge</span></div>
+      <div class="api-desc">Connect a live panel to the bridge server. Returns a handle, also stored on <code>ui.mcp</code>: <code>connected</code>, <code>readOnly</code>, <code>url</code>, <code>dispose()</code>.</div>
+      <table class="api-table">
+        <tr><th>Option</th><th>Type</th><th>Description</th></tr>
+        <tr><td class="name">url</td><td class="type">string</td><td>Bridge origin (default <code>http://127.0.0.1:7391</code>). Loopback only — anything else throws.</td></tr>
+        <tr><td class="name">token</td><td class="type">string</td><td>Shared token printed by the server. Omit only when it runs with <code>--no-token</code>.</td></tr>
+        <tr><td class="name">readOnly</td><td class="type">boolean</td><td>Serve reads and refuse every write. Inspection without control.</td></tr>
+        <tr><td class="name">confirm</td><td class="type">function</td><td><code>(tool, args) =&gt; boolean</code>. Called before each <em>mutating</em> tool; return <code>false</code> to veto it. Reads are never gated.</td></tr>
+      </table>
+    </div>
+
+    <p class="mcp-note">The transport is Server-Sent Events down and <code>fetch</code> back up — both native to the browser — so the library still ships with no runtime dependencies. Only the Node server needs the MCP SDK, and it's an optional peer, so an ordinary install never pulls it in.</p>
   </section>
 
   <!-- ═══ Live demos ═══════════════════════════════════════════ -->
