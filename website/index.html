@@ -815,7 +815,7 @@ npx ghost-panel-mcp</pre>
 });`,
 
     html:
-`<span class="tok-tag">&lt;script</span> <span class="tok-prop">src</span>=<span class="tok-str">"https://unpkg.com/ghost-panel/dist/ghost-panel.umd.js"</span><span class="tok-tag">&gt;&lt;/script&gt;</span>
+`<span class="tok-tag">&lt;script</span> <span class="tok-prop">src</span>=<span class="tok-str">"https://cdn.jsdelivr.net/gh/epun/ghost-panel@main/dist/ghost-panel.umd.js"</span><span class="tok-tag">&gt;&lt;/script&gt;</span>
 
 <span class="tok-tag">&lt;script&gt;</span>
   <span class="tok-key">const</span> ui = <span class="tok-fn">GhostPanel.createGhostPanel</span>({
@@ -868,15 +868,21 @@ npx ghost-panel-mcp</pre>
 <span class="tok-tag">&lt;/template&gt;</span>`,
 
     agents:
-`<span class="tok-cm"># Ghost Panel is npm-installable and ships AGENTS.md.</span>
-<span class="tok-cm"># Claude Code / Codex / Cursor read the skills schema</span>
-<span class="tok-cm"># from AGENTS.md and call createGhostPanel like any host:</span>
+`<span class="tok-cm">// Two ways in, documented in AGENTS.md.</span>
 
+<span class="tok-cm">// 1. In-page — your code runs alongside the panel.</span>
 <span class="tok-key">import</span> { <span class="tok-fn">createGhostPanel</span> } <span class="tok-key">from</span> <span class="tok-str">'ghost-panel'</span>;
 <span class="tok-key">const</span> ui = <span class="tok-fn">createGhostPanel</span>({ scene, camera, renderer });
 
-<span class="tok-cm"># ui.skills.describe()  → capability catalog</span>
-<span class="tok-cm"># ui.skills.register({…}) → add a skill at runtime</span>`,
+ui.skills.<span class="tok-fn">describe</span>();      <span class="tok-cm">// capability catalog</span>
+ui.skills.<span class="tok-fn">register</span>({ … }); <span class="tok-cm">// add a skill at runtime</span>
+
+<span class="tok-cm">// 2. Over MCP — an external agent drives the live page.</span>
+<span class="tok-cm">//    npx ghost-panel-mcp   +   claude mcp add ghost-panel</span>
+<span class="tok-key">import</span> { <span class="tok-fn">attachMCPBridge</span> } <span class="tok-key">from</span> <span class="tok-str">'ghost-panel/mcp-bridge'</span>;
+<span class="tok-key">if</span> (import.meta.env.DEV) {
+  <span class="tok-fn">attachMCPBridge</span>(ui, { token: <span class="tok-str">'…'</span> });
+}`,
   };
 
   const code = document.getElementById('fw-code');
