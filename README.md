@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/branding/hero.gif" alt="Ghost Panel — self-aware inspector for designers (live demo)" width="720">
+  <img src="https://raw.githubusercontent.com/epun/ghost-panel/main/assets/branding/hero.gif" alt="Ghost Panel — self-aware inspector for designers (live demo)" width="720">
 </p>
 
 # Ghost Panel
